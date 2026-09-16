@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Elecciones Municipales 2026</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="hero">
+      <img class="campaign-logo" src="logopincho.jpeg" alt="Logo Derlis Pincho Maidana Intendente">
+    </header>
+
+    <main id="loginScreen">
+      <section class="panel login-panel">
+        <div class="section-title">
+          <h2>Acceso al sistema</h2>
+        </div>
+        <form id="loginForm" class="login-form">
+          <label>Usuario
+            <input id="loginUsername" type="text" autocomplete="username" required>
+          </label>
+          <label>Contraseña
+            <input id="loginPassword" type="password" autocomplete="current-password" required>
+          </label>
+          <button class="primary" type="submit">Entrar</button>
+        </form>
+        <p id="loginError" class="login-error" hidden>Usuario o contraseña incorrectos.</p>
+      </section>
+    </main>
+
+    <main id="appScreen" hidden>
+      <div id="activeUserBadge" class="active-user-badge" aria-live="polite"></div>
+
+      <nav class="view-nav" aria-label="Vistas del sistema">
+        <button id="operationsViewButton" type="button" class="nav-button active" data-view-button="operations">Sistema de Gestion</button>
+        <button id="summaryViewButton" type="button" class="nav-button" data-view-button="summary">Resumen</button>
+        <button id="mobileViewButton" type="button" class="nav-button" data-view-button="mobile">Moviles</button>
+        <button id="refundViewButton" type="button" class="nav-button" data-view-button="refund">Devolucion de Pasaje</button>
+        <button id="surveyViewButton" type="button" class="nav-button" data-view-button="survey">Encuesta</button>
+        <button id="exitPollViewButton" type="button" class="nav-button" data-view-button="exitPoll">Boca de urna</button>
+        <button id="usersViewButton" type="button" class="nav-button" data-view-button="users">Usuarios</button>
+        <button id="reportViewButton" type="button" class="nav-button" data-view-button="report">Reporte</button>
+        <button id="logoutButton" type="button" class="nav-button logout-button">Salir</button>
+      </nav>
+
+      <section id="adminPanel" class="panel user-panel" hidden>
+        <div class="section-title">
+          <h2>Usuarios operadores</h2>
+        </div>
+        <form id="userForm" class="login-form">
+          <label>Nombre
+            <input id="newFirstName" type="text" autocomplete="given-name" required>
+          </label>
+          <label>Apellido
+            <input id="newLastName" type="text" autocomplete="family-name" required>
+          </label>
+          <label>Usuario
+            <input id="newUsername" type="text" autocomplete="off" required>
+          </label>
+          <label>Contraseña
+            <input id="newPassword" type="password" autocomplete="new-password" required>
+          </label>
+          <label>Funcion a cumplir
+            <select id="newFunction" required>
+              <option value="">Seleccione</option>
+              <option value="Sistema de Gestion">Sistema de Gestion</option>
+              <option value="Moviles">Moviles</option>
+              <option value="Devolucion de Pasaje">Devolucion de Pasaje</option>
+              <option value="Admin">Admin</option>
+            </select>
+          </label>
+          <label>Descripcion de funcion
+            <input id="newFunctionDescription" type="text" autocomplete="off" placeholder="Ej.: Barrio Fatima" required>
+          </label>
+          <button class="primary" type="submit">Crear usuario</button>
+        </form>
+        <p id="userMessage" class="login-help" hidden></p>
+        <div id="usersList" class="users-list"></div>
+      </section>
+
+      <section id="summaryPanel" class="panel summary-panel" hidden>
+        <div class="section-title">
+          <h2>Resumen</h2>
+        </div>
+        <div class="stats dashboard-stats summary-stats" aria-live="polite">
+          <button class="summary-card" type="button" data-summary="all"><strong id="totalVoters">0</strong> votantes</button>
+          <button class="summary-card" type="button" data-summary="pc"><strong id="pcCount">0</strong> pasaron por PC</button>
+          <button class="summary-card" type="button" data-summary="budgeted"><strong id="budgetedAmount">0</strong> presupuestado</button>
+          <button class="summary-card" type="button" data-summary="paid"><strong id="paidAmount">0</strong> pagado</button>
+          <button class="summary-card" type="button" data-summary="mobile"><strong id="mobileCount">0</strong> moviles</button>
+          <button class="summary-card" type="button" data-summary="refund"><strong id="refundCount">0</strong> devolucion de pasajes</button>
+          <button class="summary-card" type="button" data-summary="payment"><strong id="paymentCount">0</strong> pagos</button>
+        </div>
+        <div id="summaryDetail" class="summary-detail" hidden>
+          <div class="section-title">
+            <h2 id="summaryDetailTitle">Detalle</h2>
+          </div>
+          <div class="table-wrap">
+            <table class="summary-detail-table">
+              <thead>
+                <tr>
+                  <th>Nombres</th>
+                  <th>Apellidos</th>
+                  <th>Cedula</th>
+                  <th>Tipo</th>
+                  <th>Monto</th>
+                  <th>Barrio/compania</th>
+                  <th>PC</th>
+                </tr>
+              </thead>
+              <tbody id="summaryDetailBody"></tbody>
+            </table>
+          </div>
+          <p id="summaryDetailEmpty" class="empty">No hay personas para este resumen.</p>
+        </div>
+      </section>
+
+      <section class="panel tools-panel">
+        <div class="section-title">
+          <h2>Busqueda y archivos</h2>
+          <div class="section-actions">
+            <button id="exportCsv" type="button" class="ghost" data-view-only="operations">Exportar CSV</button>
+          </div>
+        </div>
+        <div class="tools">
+          <label>Buscar
+            <input id="search" type="search" placeholder="Nombres, apellidos, cedula, local, ciudad...">
+          </label>
+          <label data-view-only="operations">Filtrar tipo
+            <select id="filterType">
+              <option value="">Todos</option>
+              <option value="gratis">Gratis</option>
+              <option value="pago">Pago</option>
+              <option value="devolucion">Devolucion</option>
+              <option value="movil">Movil</option>
+            </select>
+          </label>
+          <label data-view-only="operations">Filtrar PC
+            <select id="filterPc">
+              <option value="">Todos</option>
+              <option value="si">Paso por PC</option>
+              <option value="no">No paso por PC</option>
+            </select>
+          </label>
+          <div class="filter-dropdown">
+            <button id="neighborhoodDropdownButton" class="filter-dropdown-button" type="button" aria-expanded="false">
+              Barrio/compania: Todos
+            </button>
+            <div id="neighborhoodDropdown" class="filter-dropdown-menu" hidden>
+              <label class="check-row"><input type="checkbox" value="FATIMA" data-neighborhood-filter> FATIMA</label>
+              <label class="check-row"><input type="checkbox" value="LOURDES" data-neighborhood-filter> LOURDES</label>
+              <label class="check-row"><input type="checkbox" value="MERCEDES" data-neighborhood-filter> MERCEDES</label>
+              <label class="check-row"><input type="checkbox" value="CAACUPE" data-neighborhood-filter> CAACUPE</label>
+              <label class="check-row"><input type="checkbox" value="ITACURUBI" data-neighborhood-filter> ITACURUBI</label>
+              <label class="check-row"><input type="checkbox" value="SAN FERNANDO" data-neighborhood-filter> SAN FERNANDO</label>
+              <label class="check-row"><input type="checkbox" value="TRINIDAD KUE" data-neighborhood-filter> TRINIDAD KUE</label>
+              <label class="check-row"><input type="checkbox" value="TAVAI" data-neighborhood-filter> TAVAI</label>
+              <label class="check-row"><input type="checkbox" value="CERRO COSTA" data-neighborhood-filter> CERRO COSTA</label>
+              <label class="check-row"><input type="checkbox" value="COSTA POI" data-neighborhood-filter> COSTA POI</label>
+              <label class="check-row"><input type="checkbox" value="CURUPAYTY" data-neighborhood-filter> CURUPAYTY</label>
+              <label class="check-row"><input type="checkbox" value="SAN GERONIMO" data-neighborhood-filter> SAN GERONIMO</label>
+              <label class="check-row"><input type="checkbox" value="SAN JUAN BERCHMANS" data-neighborhood-filter> SAN JUAN BERCHMANS</label>
+              <label class="check-row"><input type="checkbox" value="SAN JORGE" data-neighborhood-filter> SAN JORGE</label>
+              <label class="check-row"><input type="checkbox" value="ARROYO KARE" data-neighborhood-filter> ARROYO KARE</label>
+              <label class="check-row"><input type="checkbox" value="SAN ANTONIO" data-neighborhood-filter> SAN ANTONIO</label>
+              <label class="check-row"><input type="checkbox" value="PARACAU" data-neighborhood-filter> PARACAU</label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel table-panel">
+        <div class="section-title">
+          <h2 id="tableTitle">Sistema de Gestion</h2>
+        </div>
+        <div id="bulkTools" class="bulk-tools" hidden>
+          <p id="editModeHint" class="edit-mode-hint">Editando registro seleccionado</p>
+          <label>Tipo
+            <select id="bulkBenefitType">
+              <option value="">No cambiar</option>
+              <option value="gratis">Gratis</option>
+              <option value="pago">Pago</option>
+              <option value="devolucion">Devolucion de pasaje</option>
+              <option value="movil">Pone movil</option>
+            </select>
+          </label>
+          <label>Estado
+            <select id="bulkStatus">
+              <option value="">No cambiar</option>
+              <option value="positivo">POSITIVO</option>
+              <option value="negativo">NEGATIVO</option>
+              <option value="dudoso">DUDOSO</option>
+            </select>
+          </label>
+          <label>Monto
+            <input id="bulkAmount" type="number" min="0" step="1000" placeholder="No cambiar">
+          </label>
+          <label>Ciudad
+            <input id="bulkCity" type="text" placeholder="No cambiar">
+          </label>
+          <label>Barrio/compania
+            <select id="bulkNeighborhood">
+              <option value="">No cambiar</option>
+              <option value="FATIMA">FATIMA</option>
+              <option value="LOURDES">LOURDES</option>
+              <option value="MERCEDES">MERCEDES</option>
+              <option value="CAACUPE">CAACUPE</option>
+              <option value="ITACURUBI">ITACURUBI</option>
+              <option value="SAN FERNANDO">SAN FERNANDO</option>
+              <option value="TRINIDAD KUE">TRINIDAD KUE</option>
+              <option value="TAVAI">TAVAI</option>
+              <option value="CERRO COSTA">CERRO COSTA</option>
+              <option value="COSTA POI">COSTA POI</option>
+              <option value="CURUPAYTY">CURUPAYTY</option>
+              <option value="SAN GERONIMO">SAN GERONIMO</option>
+              <option value="SAN JUAN BERCHMANS">SAN JUAN BERCHMANS</option>
+              <option value="SAN JORGE">SAN JORGE</option>
+              <option value="ARROYO KARE">ARROYO KARE</option>
+              <option value="SAN ANTONIO">SAN ANTONIO</option>
+              <option value="PARACAU">PARACAU</option>
+            </select>
+          </label>
+          <label>Tipo de movil
+            <select id="bulkMobileType">
+              <option value="">No cambiar</option>
+              <option value="completo">Completo</option>
+              <option value="parcial">Parcial</option>
+            </select>
+          </label>
+          <label>Paso por PC
+            <select id="bulkPassedPc">
+              <option value="">No cambiar</option>
+              <option value="si">Si</option>
+              <option value="no">No</option>
+            </select>
+          </label>
+          <button id="applyBulk" type="button" class="primary">Guardar seleccionados</button>
+          <button id="clearBulkFields" type="button" class="ghost">Dejar datos en blanco</button>
+          <button id="cancelBulkEdit" type="button" class="ghost">Cancelar</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead id="tableHead"></thead>
+            <tbody id="recordsBody"></tbody>
+          </table>
+        </div>
+        <p id="emptyState" class="empty">Todavia no hay registros cargados.</p>
+      </section>
+
+      <section id="exitPollPanel" class="panel exit-poll-panel" hidden>
+        <div class="section-title">
+          <h2>Boca de urna</h2>
+        </div>
+        <p class="hint">Calculado solo con registros marcados como Paso por PC.</p>
+        <div id="exitPollGeneral" class="exit-poll-cards"></div>
+        <div id="exitPollChart" class="exit-poll-chart-wrap"></div>
+        <div class="table-wrap">
+          <table class="exit-poll-table">
+            <thead>
+              <tr>
+                <th>Barrio/compania</th>
+                <th>Total PC</th>
+                <th>POSITIVO</th>
+                <th>DUDOSO</th>
+                <th>NEGATIVO</th>
+              </tr>
+            </thead>
+            <tbody id="exitPollBody"></tbody>
+          </table>
+        </div>
+        <p id="exitPollEmpty" class="empty">Todavia no hay registros que hayan pasado por PC.</p>
+      </section>
+
+      <section id="surveyPanel" class="panel exit-poll-panel" hidden>
+        <div class="section-title">
+          <h2>Encuesta</h2>
+        </div>
+        <p class="hint">Calculado con todos los registros que tengan estado cargado.</p>
+        <div id="surveyGeneral" class="exit-poll-cards"></div>
+        <div id="surveyChart" class="exit-poll-chart-wrap"></div>
+        <div class="table-wrap">
+          <table class="exit-poll-table">
+            <thead>
+              <tr>
+                <th>Barrio/compania</th>
+                <th>Total</th>
+                <th>POSITIVO</th>
+                <th>DUDOSO</th>
+                <th>NEGATIVO</th>
+              </tr>
+            </thead>
+            <tbody id="surveyBody"></tbody>
+          </table>
+        </div>
+        <p id="surveyEmpty" class="empty">Todavia no hay registros con estado cargado.</p>
+      </section>
+
+      <section id="reportPanel" class="panel report-panel" hidden>
+        <div class="section-title">
+          <h2>Reporte del sistema</h2>
+          <div class="section-actions">
+            <button id="printPcReport" type="button" class="primary">Generar PDF Paso por PC</button>
+          </div>
+        </div>
+        <p class="hint">Historial de acciones realizadas por los usuarios en este navegador.</p>
+        <div class="table-wrap">
+          <table class="report-table">
+            <thead>
+              <tr>
+                <th>Fecha y hora</th>
+                <th>Usuario</th>
+                <th>Accion</th>
+                <th>Detalle</th>
+              </tr>
+            </thead>
+            <tbody id="auditLogBody"></tbody>
+          </table>
+        </div>
+        <p id="auditLogEmpty" class="empty">Todavia no hay acciones registradas.</p>
+      </section>
+    </main>
+
+    <script src="app.js?v=20260916-reporte-detalles"></script>
+  </body>
+</html>
