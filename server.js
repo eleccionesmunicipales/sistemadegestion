@@ -139,6 +139,28 @@ app.get("/api/health", (req, res) => {
   res.json({ ok: true });
 });
 
+app.get("/api/health/db", async (req, res) => {
+  const { count, error } = await supabase
+    .from("app_users")
+    .select("id", { count: "exact", head: true });
+  if (error) return res.status(500).json({ ok: false, error: error.message });
+
+  const { data: admin, error: adminError } = await supabase
+    .from("app_users")
+    .select("username, role, function_name")
+    .eq("username", "admin")
+    .maybeSingle();
+  if (adminError) return res.status(500).json({ ok: false, error: adminError.message });
+
+  res.json({
+    ok: true,
+    usersCount: count,
+    adminExists: Boolean(admin),
+    adminRole: admin?.role || "",
+    adminFunction: admin?.function_name || "",
+  });
+});
+
 app.post("/api/auth/login", async (req, res) => {
   const username = String(req.body.username || "").trim();
   const password = String(req.body.password || "");
