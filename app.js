@@ -537,7 +537,14 @@ function getNeighborhoodGroups() {
 
 function getSelectedNeighborhoodRecords() {
   if (!selectedNeighborhoodSummary) return [];
-  return records.filter((record) => (normalize(record.neighborhood) || "Sin barrio/compañia") === selectedNeighborhoodSummary);
+  return records
+    .filter((record) => (normalize(record.neighborhood) || "Sin barrio/compañia") === selectedNeighborhoodSummary)
+    .sort((a, b) => {
+      const blockA = Number(normalize(a.blockNumber) || Number.MAX_SAFE_INTEGER);
+      const blockB = Number(normalize(b.blockNumber) || Number.MAX_SAFE_INTEGER);
+      if (blockA !== blockB) return blockA - blockB;
+      return fixNameText(a.lastNames).localeCompare(fixNameText(b.lastNames), "es") || fixNameText(a.firstNames || a.fullName || "").localeCompare(fixNameText(b.firstNames || b.fullName || ""), "es");
+    });
 }
 
 function renderNeighborhoodSummary() {

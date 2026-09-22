@@ -235,6 +235,16 @@ main { padding: 1.5rem clamp(1rem, 4vw, 4rem) 3rem; }
   backdrop-filter: blur(14px);
 }
 
+.tools-panel {
+  position: relative;
+  z-index: 1000;
+}
+
+.table-panel {
+  position: relative;
+  z-index: 1;
+}
+
 .section-title { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
 .section-actions { display: flex; flex-wrap: wrap; gap: .6rem; }
 h2 { margin: 0; font-size: 1.25rem; letter-spacing: -.02em; }
@@ -369,6 +379,7 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 
 .filter-dropdown {
   position: relative;
+  z-index: 50;
   align-self: end;
 }
 
@@ -394,7 +405,7 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 
 .filter-dropdown-menu {
   position: absolute;
-  z-index: 10;
+  z-index: 9999;
   top: calc(100% + .35rem);
   left: 0;
   right: 0;
