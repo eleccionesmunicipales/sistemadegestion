@@ -28,6 +28,16 @@ const summaryDetail = document.querySelector("#summaryDetail");
 const summaryDetailTitle = document.querySelector("#summaryDetailTitle");
 const summaryDetailBody = document.querySelector("#summaryDetailBody");
 const summaryDetailEmpty = document.querySelector("#summaryDetailEmpty");
+const neighborhoodSummaryList = document.querySelector("#neighborhoodSummaryList");
+const neighborhoodSummaryEmpty = document.querySelector("#neighborhoodSummaryEmpty");
+const neighborhoodDetail = document.querySelector("#neighborhoodDetail");
+const neighborhoodDetailTitle = document.querySelector("#neighborhoodDetailTitle");
+const neighborhoodDetailBody = document.querySelector("#neighborhoodDetailBody");
+const neighborhoodDetailEmpty = document.querySelector("#neighborhoodDetailEmpty");
+const printNeighborhoodPdf = document.querySelector("#printNeighborhoodPdf");
+const printMobilePdf = document.querySelector("#printMobilePdf");
+const printRefundPdf = document.querySelector("#printRefundPdf");
+const printPaymentPdf = document.querySelector("#printPaymentPdf");
 const recordsBody = document.querySelector("#recordsBody");
 const emptyState = document.querySelector("#emptyState");
 const search = document.querySelector("#search");
@@ -66,6 +76,7 @@ const bulkFields = {
   neighborhood: document.querySelector("#bulkNeighborhood"),
   mobileType: document.querySelector("#bulkMobileType"),
   passedPc: document.querySelector("#bulkPassedPc"),
+  blockNumber: document.querySelector("#bulkBlockNumber"),
 };
 
 let records = repairLoadedRecords(loadRecords());
@@ -77,6 +88,7 @@ let selectedRecords = new Set();
 let currentView = "operations";
 let bulkEditorOpen = false;
 let selectedSummary = "";
+let selectedNeighborhoodSummary = "";
 let lastRecordsJson = localStorage.getItem(STORAGE_KEY) || "";
 let lastUsersJson = localStorage.getItem(USERS_KEY) || "";
 let lastAuditJson = localStorage.getItem(AUDIT_KEY) || "";
@@ -272,11 +284,16 @@ function repairLoadedRecords(loadedRecords) {
     const firstNames = fixNameText(record.firstNames || "");
     const lastNames = fixNameText(record.lastNames || "");
     const fullName = fixNameText(record.fullName || "");
+    const repairedRecord = {
+      ...record,
+      voted: Boolean(record.voted),
+      blockNumber: normalize(record.blockNumber),
+    };
     if (firstNames !== normalize(record.firstNames) || lastNames !== normalize(record.lastNames) || fullName !== normalize(record.fullName)) {
       changed = true;
-      return { ...record, firstNames, lastNames, fullName };
+      return { ...repairedRecord, firstNames, lastNames, fullName };
     }
-    return record;
+    return repairedRecord;
   });
 
   if (changed) {
@@ -406,17 +423,19 @@ function getDetail(record) {
 }
 
 function getFilteredRecords() {
-  const term = normalize(search.value).toLowerCase();
+  const terms = normalizeKey(search.value).split(/\s+/).filter(Boolean);
   const selectedNeighborhoods = getSelectedNeighborhoods();
   return records.filter((record) => {
     const viewType = currentView === "mobile" ? "movil" : currentView === "refund" ? "devolucion" : "";
     const matchesType = viewType ? record.benefitType === viewType : (!filterType.value || record.benefitType === filterType.value);
     const matchesPc = !filterPc.value || (filterPc.value === "si" ? record.passedPc : !record.passedPc);
     const matchesNeighborhood = !selectedNeighborhoods.length || selectedNeighborhoods.includes(normalize(record.neighborhood).toUpperCase());
-    const text = [record.firstNames, fixNameText(record.firstNames), record.lastNames, fixNameText(record.lastNames), record.fullName, fixNameText(record.fullName), record.birthDate, record.sex, record.documentNumber, record.pollingPlace, record.tableNumber, record.orderNumber, record.city, record.neighborhood, record.mobileType, record.status]
+    const text = [record.firstNames, fixNameText(record.firstNames), record.lastNames, fixNameText(record.lastNames), record.fullName, fixNameText(record.fullName), record.birthDate, record.sex, record.documentNumber, record.pollingPlace, record.tableNumber, record.orderNumber, record.city, record.neighborhood, record.mobileType, record.status, record.blockNumber, record.voted ? "voto" : "no voto"]
       .join(" ")
-      .toLowerCase();
-    return matchesType && matchesPc && matchesNeighborhood && text.includes(term);
+      .replace(/ñ/g, "n");
+    const normalizedText = normalizeKey(text);
+    const matchesSearch = terms.every((term) => normalizedText.includes(term));
+    return matchesType && matchesPc && matchesNeighborhood && matchesSearch;
   });
 }
 
@@ -450,6 +469,7 @@ function renderStats() {
   document.querySelector("#refundCount").textContent = records.filter((record) => record.benefitType === "devolucion").length;
   document.querySelector("#paymentCount").textContent = records.filter((record) => record.benefitType === "pago").length;
   renderSummaryDetail();
+  renderNeighborhoodSummary();
 }
 
 function getSummaryRecords(type) {
@@ -502,6 +522,203 @@ function renderSummaryDetail() {
   });
 }
 
+function getNeighborhoodGroups() {
+  const groups = new Map();
+  records.forEach((record) => {
+    const neighborhood = normalize(record.neighborhood) || "Sin barrio/compañia";
+    if (!groups.has(neighborhood)) groups.set(neighborhood, []);
+    groups.get(neighborhood).push(record);
+  });
+
+  return Array.from(groups.entries())
+    .map(([neighborhood, items]) => ({ neighborhood, count: items.length, items }))
+    .sort((a, b) => a.neighborhood.localeCompare(b.neighborhood, "es"));
+}
+
+function getSelectedNeighborhoodRecords() {
+  if (!selectedNeighborhoodSummary) return [];
+  return records.filter((record) => (normalize(record.neighborhood) || "Sin barrio/compañia") === selectedNeighborhoodSummary);
+}
+
+function renderNeighborhoodSummary() {
+  if (!neighborhoodSummaryList) return;
+
+  const groups = getNeighborhoodGroups();
+  neighborhoodSummaryList.innerHTML = groups.map((group) => `
+    <button class="neighborhood-summary-card ${group.neighborhood === selectedNeighborhoodSummary ? "active" : ""}" type="button" data-neighborhood-summary="${escapeHtml(group.neighborhood)}">
+      <span>${escapeHtml(group.neighborhood)}</span>
+      <strong>${group.count}</strong>
+    </button>
+  `).join("");
+  neighborhoodSummaryEmpty.hidden = groups.length > 0;
+  renderNeighborhoodDetail();
+}
+
+function renderNeighborhoodDetail() {
+  if (!neighborhoodDetail) return;
+  if (!selectedNeighborhoodSummary) {
+    neighborhoodDetail.hidden = true;
+    return;
+  }
+
+  const detailRecords = getSelectedNeighborhoodRecords();
+  neighborhoodDetail.hidden = false;
+  neighborhoodDetailTitle.textContent = `${selectedNeighborhoodSummary} (${detailRecords.length})`;
+  neighborhoodDetailBody.innerHTML = detailRecords.map((record) => `
+    <tr>
+      <td>${escapeHtml(fixNameText(record.firstNames || record.fullName || ""))}</td>
+      <td>${escapeHtml(fixNameText(record.lastNames))}</td>
+      <td>${escapeHtml(record.documentNumber)}</td>
+      <td>${escapeHtml(record.pollingPlace)}</td>
+      <td>${escapeHtml(record.tableNumber)}</td>
+      <td>${escapeHtml(record.orderNumber)}</td>
+      <td><span class="pill status-${statusValue(record.status)}">${statusLabel(record.status)}</span></td>
+      <td>${escapeHtml(benefitLabel(record.benefitType) || "-")}</td>
+      <td><span class="pill ${record.voted ? "pc-yes" : "pc-no"}">${record.voted ? "VOTO" : "NO VOTO"}</span></td>
+    </tr>
+  `).join("");
+  neighborhoodDetailEmpty.hidden = detailRecords.length > 0;
+}
+
+function generateNeighborhoodPdf() {
+  const detailRecords = getSelectedNeighborhoodRecords();
+  if (!selectedNeighborhoodSummary) {
+    alert("Seleccione un barrio/compañia primero.");
+    return;
+  }
+
+  const generatedAt = new Date().toLocaleString("es-PY");
+  const rows = detailRecords.map((record) => `
+    <tr>
+      <td>${escapeHtml(fixNameText(record.lastNames))}</td>
+      <td>${escapeHtml(fixNameText(record.firstNames || record.fullName || ""))}</td>
+      <td>${escapeHtml(record.documentNumber)}</td>
+      <td>${escapeHtml(record.pollingPlace)}</td>
+      <td>${escapeHtml(record.tableNumber)}</td>
+      <td>${escapeHtml(record.orderNumber)}</td>
+      <td>${escapeHtml(statusLabel(record.status))}</td>
+      <td>${escapeHtml(benefitLabel(record.benefitType) || "-")}</td>
+      <td>${escapeHtml(getDetail(record))}</td>
+    </tr>
+  `).join("");
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    alert("El navegador bloqueo la ventana del reporte. Permita ventanas emergentes para generar el PDF.");
+    return;
+  }
+
+  printWindow.document.write(`
+    <!doctype html>
+    <html lang="es">
+      <head>
+        <meta charset="utf-8">
+        <title>Reporte ${escapeHtml(selectedNeighborhoodSummary)}</title>
+        <style>
+          body { font-family: Arial, sans-serif; color: #111; margin: 24px; }
+          h1 { margin: 0 0 6px; font-size: 22px; }
+          p { margin: 0 0 14px; color: #555; }
+          table { width: 100%; border-collapse: collapse; font-size: 11px; }
+          th, td { border: 1px solid #ddd; padding: 6px; text-align: left; vertical-align: top; }
+          th { background: #f1f1f1; text-transform: uppercase; font-size: 10px; }
+        </style>
+      </head>
+      <body>
+        <h1>Reporte por barrio/compañia: ${escapeHtml(selectedNeighborhoodSummary)}</h1>
+        <p>Generado: ${escapeHtml(generatedAt)} | Total: ${detailRecords.length}</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Apellidos</th>
+              <th>Nombres</th>
+              <th>Cedula</th>
+              <th>Local</th>
+              <th>Mesa</th>
+              <th>Orden</th>
+              <th>Estado</th>
+              <th>Tipo</th>
+              <th>Detalle</th>
+            </tr>
+          </thead>
+          <tbody>${rows || `<tr><td colspan="9">No hay registros para este barrio/compañia.</td></tr>`}</tbody>
+        </table>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.focus();
+  registerAction("Genero reporte PDF", `Barrio/compañia ${selectedNeighborhoodSummary}: ${detailRecords.length} registros`);
+  printWindow.print();
+}
+
+function generateBenefitPdf(type, title) {
+  const reportRecords = records.filter((record) => record.benefitType === type);
+  const generatedAt = new Date().toLocaleString("es-PY");
+  const rows = reportRecords.map((record) => `
+    <tr>
+      <td>${escapeHtml(fixNameText(record.lastNames))}</td>
+      <td>${escapeHtml(fixNameText(record.firstNames || record.fullName || ""))}</td>
+      <td>${escapeHtml(record.documentNumber)}</td>
+      <td>${escapeHtml(record.pollingPlace)}</td>
+      <td>${escapeHtml(record.tableNumber)}</td>
+      <td>${escapeHtml(record.orderNumber)}</td>
+      <td>${escapeHtml(record.neighborhood)}</td>
+      <td>${escapeHtml(statusLabel(record.status))}</td>
+      <td>${escapeHtml(benefitLabel(record.benefitType) || "-")}</td>
+      <td>${escapeHtml(getDetail(record))}</td>
+      <td>${money(record.amount)}</td>
+    </tr>
+  `).join("");
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    alert("El navegador bloqueo la ventana del reporte. Permita ventanas emergentes para generar el PDF.");
+    return;
+  }
+
+  printWindow.document.write(`
+    <!doctype html>
+    <html lang="es">
+      <head>
+        <meta charset="utf-8">
+        <title>Reporte ${escapeHtml(title)}</title>
+        <style>
+          body { font-family: Arial, sans-serif; color: #111; margin: 24px; }
+          h1 { margin: 0 0 6px; font-size: 22px; }
+          p { margin: 0 0 14px; color: #555; }
+          table { width: 100%; border-collapse: collapse; font-size: 11px; }
+          th, td { border: 1px solid #ddd; padding: 6px; text-align: left; vertical-align: top; }
+          th { background: #f1f1f1; text-transform: uppercase; font-size: 10px; }
+        </style>
+      </head>
+      <body>
+        <h1>Reporte ${escapeHtml(title)}</h1>
+        <p>Generado: ${escapeHtml(generatedAt)} | Total: ${reportRecords.length}</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Apellidos</th>
+              <th>Nombres</th>
+              <th>Cedula</th>
+              <th>Local</th>
+              <th>Mesa</th>
+              <th>Orden</th>
+              <th>Barrio/compañia</th>
+              <th>Estado</th>
+              <th>Tipo</th>
+              <th>Detalle</th>
+              <th>Monto</th>
+            </tr>
+          </thead>
+          <tbody>${rows || `<tr><td colspan="11">No hay registros para este reporte.</td></tr>`}</tbody>
+        </table>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.focus();
+  registerAction("Genero reporte PDF", `${title}: ${reportRecords.length} registros`);
+  printWindow.print();
+}
+
 function renderAuth() {
   loginScreen.hidden = Boolean(currentUser);
   appScreen.hidden = !currentUser;
@@ -512,6 +729,25 @@ function renderAuth() {
 
   viewButtons.forEach((button) => { button.hidden = !canAccessView(button.dataset.viewButton); });
   renderUsersList();
+  renderTable();
+}
+
+function switchView(view) {
+  if (!canAccessView(view)) return;
+  const previousView = currentView;
+  currentView = view;
+  bulkEditorOpen = false;
+  if (currentView === "mobile" || currentView === "refund") {
+    filterType.value = "";
+    filterPc.value = "";
+  }
+  if (currentView === "operations" && selectedSummary === "payment") {
+    filterType.value = "pago";
+    filterPc.value = "";
+  }
+  if (currentView !== "summary") selectedSummary = "";
+  selectedRecords.clear();
+  if (previousView !== currentView) registerAction("Cambio de vista", viewLabel(currentView));
   renderTable();
 }
 
@@ -623,6 +859,9 @@ function renderViewChrome() {
   }[currentView] || "Sistema de Gestion";
   toolsPanel.hidden = exitPoll || survey || usersView || reportView || summaryView;
   tablePanel.hidden = exitPoll || survey || usersView || reportView || summaryView;
+  printMobilePdf.hidden = currentView !== "mobile";
+  printRefundPdf.hidden = currentView !== "refund";
+  printPaymentPdf.hidden = currentView !== "operations";
   exitPollPanel.hidden = !exitPoll;
   surveyPanel.hidden = !survey;
   reportPanel.hidden = !reportView;
@@ -645,9 +884,9 @@ function renderViewChrome() {
   });
   tableHead.innerHTML = currentView === "mobile" ? `
     <tr>
-      <th>Nombres</th>
-      <th>Apellidos</th>
-      <th>Cedula</th>
+      <th class="name-col">Nombres</th>
+      <th class="name-col">Apellidos</th>
+      <th class="document-col">Cedula</th>
       <th>Tipo movil</th>
       <th>Barrio/compania</th>
       <th>Local</th>
@@ -677,9 +916,11 @@ function renderViewChrome() {
       <th>Nombres</th>
       <th>Apellidos</th>
       <th>Cedula</th>
+      <th>Votacion</th>
       <th>Tipo</th>
       <th>Detalle</th>
       <th>Barrio/compania</th>
+      <th>Manzana</th>
       <th>Estado</th>
       <th>Monto</th>
       <th>PC</th>
@@ -724,11 +965,11 @@ function getStatusSummary(summaryRecords) {
 }
 
 function renderExitPoll() {
-  const passedPcRecords = records.filter((record) => record.passedPc);
-  const { general, neighborhoods } = getStatusSummary(passedPcRecords);
+  const votedRecords = records.filter((record) => record.voted && statusValue(record.status));
+  const { general, neighborhoods } = getStatusSummary(votedRecords);
 
   exitPollGeneral.innerHTML = `
-    ${exitPollCard("Total PC", general.total)}
+    ${exitPollCard("Total votos", general.total)}
     ${exitPollCard("POSITIVO", general.positivo, "status-positivo")}
     ${exitPollCard("DUDOSO", general.dudoso, "status-dudoso")}
     ${exitPollCard("NEGATIVO", general.negativo, "status-negativo")}
@@ -744,7 +985,7 @@ function renderExitPoll() {
       <td><span class="pill status-negativo">${item.negativo} (${percentLabel(item.negativo, item.total)})</span></td>
     </tr>
   `).join("");
-  exitPollEmpty.hidden = passedPcRecords.length > 0;
+  exitPollEmpty.hidden = votedRecords.length > 0;
 }
 
 function renderSurvey() {
@@ -906,16 +1147,22 @@ function chartLegendItem(label, count, percent, className) {
 
 function operationsRow(record) {
   return `
-    <td>${escapeHtml(fixNameText(record.firstNames || record.fullName || ""))}</td>
-    <td>${escapeHtml(fixNameText(record.lastNames))}</td>
-    <td>${escapeHtml(record.documentNumber)}</td>
+    <td class="name-cell">${escapeHtml(fixNameText(record.firstNames || record.fullName || ""))}</td>
+    <td class="name-cell">${escapeHtml(fixNameText(record.lastNames))}</td>
+    <td class="document-cell">${escapeHtml(record.documentNumber)}</td>
+    <td class="vote-place">
+      <strong>${escapeHtml(record.pollingPlace)}</strong>
+      <span>Mesa ${escapeHtml(record.tableNumber || "-")} · Orden ${escapeHtml(record.orderNumber || "-")}</span>
+    </td>
     <td><span class="pill">${benefitLabel(record.benefitType)}</span></td>
     <td>${escapeHtml(getDetail(record))}</td>
     <td>${escapeHtml(record.neighborhood)}</td>
+    <td>${escapeHtml(record.blockNumber)}</td>
     <td><span class="pill status-${statusValue(record.status)}">${statusLabel(record.status)}</span></td>
     <td>${money(record.amount)}</td>
     <td><span class="pill ${record.passedPc ? "pc-yes" : "pc-no"}">${record.passedPc ? "Si" : "No"}</span></td>
     <td class="actions">
+      <button class="row-button vote-toggle ${record.voted ? "voted" : "not-voted"}" data-action="toggle-voted" data-id="${record.id}" type="button">${record.voted ? "VOTO" : "NO VOTO"}</button>
       <button class="row-button" data-action="edit" data-id="${record.id}" type="button">Editar</button>
     </td>
   `;
@@ -974,6 +1221,11 @@ recordsBody.addEventListener("click", (event) => {
   const record = records.find((item) => item.id === button.dataset.id);
   if (!record) return;
 
+  if (button.dataset.action === "toggle-voted") {
+    toggleVoted(record);
+    return;
+  }
+
   if (button.dataset.action === "edit") {
     selectedRecords.clear();
     selectedRecords.add(record.id);
@@ -992,6 +1244,26 @@ function resetBulkFields() {
   bulkFields.neighborhood.value = "";
   bulkFields.mobileType.value = "";
   bulkFields.passedPc.value = "";
+  bulkFields.blockNumber.value = "";
+}
+
+async function toggleVoted(record) {
+  const previousRecords = records;
+  records = records.map((item) => item.id === record.id ? { ...item, voted: !item.voted } : item);
+  saveRecords();
+  renderTable();
+
+  try {
+    await apiRequest("/api/records/bulk", {
+      method: "POST",
+      body: JSON.stringify({ records: records.filter((item) => item.id === record.id) }),
+    });
+  } catch (error) {
+    records = previousRecords;
+    saveRecords();
+    renderTable();
+    alert(error.message);
+  }
 }
 
 async function applyBulkChanges() {
@@ -1003,6 +1275,7 @@ async function applyBulkChanges() {
 
   const hasAmount = normalize(bulkFields.amount.value) !== "";
   const hasCity = normalize(bulkFields.city.value) !== "";
+  const hasBlockNumber = normalize(bulkFields.blockNumber.value) !== "";
   records = records.map((record) => {
     if (!selectedRecords.has(record.id)) return record;
     const updated = { ...record };
@@ -1013,6 +1286,8 @@ async function applyBulkChanges() {
     if (bulkFields.neighborhood.value) updated.neighborhood = bulkFields.neighborhood.value;
     if (bulkFields.mobileType.value) updated.mobileType = bulkFields.mobileType.value;
     if (bulkFields.passedPc.value) updated.passedPc = bulkFields.passedPc.value === "si";
+    if (hasBlockNumber) updated.blockNumber = normalize(bulkFields.blockNumber.value);
+    if (bulkFields.benefitType.value === "pago") updated.amount = 100000;
     if (updated.benefitType === "gratis") {
       updated.amount = 0;
       updated.city = "";
@@ -1055,6 +1330,8 @@ async function clearSelectedFields() {
       neighborhood: "",
       mobileType: "",
       passedPc: false,
+      voted: false,
+      blockNumber: "",
     };
   });
 
@@ -1080,7 +1357,7 @@ function toCsvValue(value) {
 }
 
 function exportCsv() {
-  const headers = ["nombres", "apellidos", "fecha_nacimiento", "sexo", "cedula", "local", "barrio_compania", "estado", "mesa", "orden", "tipo", "monto", "ciudad", "tipo_movil", "paso_pc"];
+  const headers = ["nombres", "apellidos", "fecha_nacimiento", "sexo", "cedula", "local", "barrio_compania", "estado", "mesa", "orden", "tipo", "monto", "ciudad", "tipo_movil", "paso_pc", "voto", "manzana"];
   const lines = records.map((record) => [
     fixNameText(record.firstNames || record.fullName || ""),
     fixNameText(record.lastNames),
@@ -1097,6 +1374,8 @@ function exportCsv() {
     record.city,
     record.mobileType,
     record.passedPc ? "si" : "no",
+    record.voted ? "si" : "no",
+    record.blockNumber,
   ].map(toCsvValue).join(","));
   const blob = new Blob(["\uFEFF" + [headers.join(","), ...lines].join("\n")], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -1163,28 +1442,42 @@ document.querySelector("#cancelBulkEdit").addEventListener("click", () => {
 });
 viewButtons.forEach((button) => {
   button.addEventListener("click", () => {
-    if (!canAccessView(button.dataset.viewButton)) return;
-    const previousView = currentView;
-    currentView = button.dataset.viewButton;
-    bulkEditorOpen = false;
-    if (currentView === "mobile" || currentView === "refund") {
-      filterType.value = "";
-      filterPc.value = "";
-    }
-    if (currentView !== "summary") selectedSummary = "";
-    selectedRecords.clear();
-    if (previousView !== currentView) registerAction("Cambio de vista", viewLabel(currentView));
-    renderTable();
+    switchView(button.dataset.viewButton);
   });
 });
 summaryCards.forEach((card) => {
   card.addEventListener("click", () => {
     selectedSummary = card.dataset.summary;
+    if (selectedSummary === "mobile") {
+      switchView("mobile");
+      return;
+    }
+    if (selectedSummary === "refund") {
+      switchView("refund");
+      return;
+    }
+    if (selectedSummary === "payment") {
+      switchView("operations");
+      return;
+    }
     renderSummaryDetail();
   });
 });
+neighborhoodSummaryList.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-neighborhood-summary]");
+  if (!button) return;
+  selectedNeighborhoodSummary = button.dataset.neighborhoodSummary;
+  renderNeighborhoodSummary();
+});
+printNeighborhoodPdf.addEventListener("click", generateNeighborhoodPdf);
+printMobilePdf.addEventListener("click", () => generateBenefitPdf("movil", "Moviles"));
+printRefundPdf.addEventListener("click", () => generateBenefitPdf("devolucion", "Devolucion de Pasaje"));
+printPaymentPdf.addEventListener("click", () => generateBenefitPdf("pago", "Pagos"));
 document.querySelector("#applyBulk").addEventListener("click", applyBulkChanges);
 document.querySelector("#clearBulkFields").addEventListener("click", clearSelectedFields);
+bulkFields.benefitType.addEventListener("change", () => {
+  if (bulkFields.benefitType.value === "pago") bulkFields.amount.value = "100000";
+});
 neighborhoodDropdownButton.addEventListener("click", () => {
   const isOpen = neighborhoodDropdown.hidden;
   neighborhoodDropdown.hidden = !isOpen;

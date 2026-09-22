@@ -30,6 +30,8 @@ create table if not exists records (
   mobile_type text not null default '',
   passed_pc boolean not null default false,
   pc_marked_by text not null default '',
+  voted boolean not null default false,
+  block_number text not null default '',
   updated_by text not null default '',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

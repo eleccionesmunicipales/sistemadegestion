@@ -92,6 +92,40 @@
           <button class="summary-card" type="button" data-summary="refund"><strong id="refundCount">0</strong> devolucion de pasajes</button>
           <button class="summary-card" type="button" data-summary="payment"><strong id="paymentCount">0</strong> pagos</button>
         </div>
+        <div class="neighborhood-summary">
+          <div class="section-title">
+            <h2>Barrios/compañias</h2>
+          </div>
+          <div id="neighborhoodSummaryList" class="neighborhood-summary-list"></div>
+          <p id="neighborhoodSummaryEmpty" class="empty">No hay barrios/compañias cargados.</p>
+        </div>
+        <div id="neighborhoodDetail" class="summary-detail" hidden>
+          <div class="section-title">
+            <h2 id="neighborhoodDetailTitle">Detalle por barrio</h2>
+            <div class="section-actions">
+              <button id="printNeighborhoodPdf" type="button" class="ghost">Generar PDF</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="summary-detail-table">
+              <thead>
+                <tr>
+                  <th>Nombres</th>
+                  <th>Apellidos</th>
+                  <th>Cedula</th>
+                  <th>Local</th>
+                  <th>Mesa</th>
+                  <th>Orden</th>
+                  <th>Estado</th>
+                  <th>Tipo</th>
+                  <th>Voto</th>
+                </tr>
+              </thead>
+              <tbody id="neighborhoodDetailBody"></tbody>
+            </table>
+          </div>
+          <p id="neighborhoodDetailEmpty" class="empty">No hay personas para este barrio/compañia.</p>
+        </div>
         <div id="summaryDetail" class="summary-detail" hidden>
           <div class="section-title">
             <h2 id="summaryDetailTitle">Detalle</h2>
@@ -173,6 +207,11 @@
       <section class="panel table-panel">
         <div class="section-title">
           <h2 id="tableTitle">Sistema de Gestion</h2>
+          <div class="section-actions">
+            <button id="printMobilePdf" type="button" class="ghost" hidden>Generar PDF Moviles</button>
+            <button id="printRefundPdf" type="button" class="ghost" hidden>Generar PDF Devolucion</button>
+            <button id="printPaymentPdf" type="button" class="ghost" hidden>Generar PDF Pagos</button>
+          </div>
         </div>
         <div id="bulkTools" class="bulk-tools" hidden>
           <p id="editModeHint" class="edit-mode-hint">Editando registro seleccionado</p>
@@ -235,6 +274,9 @@
               <option value="no">No</option>
             </select>
           </label>
+          <label>Manzana
+            <input id="bulkBlockNumber" type="number" min="0" step="1" placeholder="No cambiar">
+          </label>
           <button id="applyBulk" type="button" class="primary">Guardar seleccionados</button>
           <button id="clearBulkFields" type="button" class="ghost">Dejar datos en blanco</button>
           <button id="cancelBulkEdit" type="button" class="ghost">Cancelar</button>
@@ -252,7 +294,7 @@
         <div class="section-title">
           <h2>Boca de urna</h2>
         </div>
-        <p class="hint">Calculado solo con registros marcados como Paso por PC.</p>
+        <p class="hint">Calculado solo con registros marcados como VOTO y con estado POSITIVO, DUDOSO o NEGATIVO.</p>
         <div id="exitPollGeneral" class="exit-poll-cards"></div>
         <div id="exitPollChart" class="exit-poll-chart-wrap"></div>
         <div class="table-wrap">
@@ -269,7 +311,7 @@
             <tbody id="exitPollBody"></tbody>
           </table>
         </div>
-        <p id="exitPollEmpty" class="empty">Todavia no hay registros que hayan pasado por PC.</p>
+        <p id="exitPollEmpty" class="empty">Todavia no hay registros marcados como VOTO con estado cargado.</p>
       </section>
 
       <section id="surveyPanel" class="panel exit-poll-panel" hidden>

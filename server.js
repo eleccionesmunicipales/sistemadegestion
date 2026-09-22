@@ -57,6 +57,8 @@ function toRecord(row) {
     mobileType: row.mobile_type,
     passedPc: Boolean(row.passed_pc),
     pcMarkedBy: row.pc_marked_by || "",
+    voted: Boolean(row.voted),
+    blockNumber: row.block_number || "",
   };
 }
 
@@ -81,6 +83,8 @@ function fromRecord(record, username = "", existingRecord = null) {
     mobile_type: record.mobileType || "",
     passed_pc: Boolean(record.passedPc),
     pc_marked_by: record.passedPc ? (existingPcMarkedBy || username) : "",
+    voted: Boolean(record.voted),
+    block_number: String(record.blockNumber || ""),
     updated_by: username,
   };
 }
