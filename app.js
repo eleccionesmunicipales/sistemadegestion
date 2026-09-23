@@ -521,6 +521,7 @@ function renderSummaryDetail() {
       <td>${escapeHtml(benefitLabel(record.benefitType) || "-")}</td>
       <td>${money(effectiveAmount(record))}</td>
       <td>${escapeHtml(record.neighborhood)}</td>
+      <td>${escapeHtml(record.blockNumber)}</td>
       <td><span class="pill ${record.passedPc ? "pc-yes" : "pc-no"}">${record.passedPc ? "Si" : "No"}</span></td>
     </tr>
   `).join("");
@@ -611,6 +612,7 @@ function generateNeighborhoodPdf() {
       <td>${escapeHtml(record.pollingPlace)}</td>
       <td>${escapeHtml(record.tableNumber)}</td>
       <td>${escapeHtml(record.orderNumber)}</td>
+      <td>${escapeHtml(record.blockNumber)}</td>
       <td>${escapeHtml(statusLabel(record.status))}</td>
       <td>${escapeHtml(benefitLabel(record.benefitType) || "-")}</td>
       <td>${escapeHtml(getDetail(record))}</td>
@@ -649,12 +651,13 @@ function generateNeighborhoodPdf() {
               <th>Local</th>
               <th>Mesa</th>
               <th>Orden</th>
+              <th>Manzana</th>
               <th>Estado</th>
               <th>Tipo</th>
               <th>Detalle</th>
             </tr>
           </thead>
-          <tbody>${rows || `<tr><td colspan="9">No hay registros para este barrio/compañia.</td></tr>`}</tbody>
+          <tbody>${rows || `<tr><td colspan="10">No hay registros para este barrio/compañia.</td></tr>`}</tbody>
         </table>
       </body>
     </html>
@@ -677,6 +680,7 @@ function generateBenefitPdf(type, title) {
       <td>${escapeHtml(record.tableNumber)}</td>
       <td>${escapeHtml(record.orderNumber)}</td>
       <td>${escapeHtml(record.neighborhood)}</td>
+      <td>${escapeHtml(record.blockNumber)}</td>
       <td>${escapeHtml(statusLabel(record.status))}</td>
       <td>${escapeHtml(benefitLabel(record.benefitType) || "-")}</td>
       <td>${escapeHtml(getDetail(record))}</td>
@@ -717,13 +721,14 @@ function generateBenefitPdf(type, title) {
               <th>Mesa</th>
               <th>Orden</th>
               <th>Barrio/compañia</th>
+              <th>Manzana</th>
               <th>Estado</th>
               <th>Tipo</th>
               <th>Detalle</th>
               <th>Monto</th>
             </tr>
           </thead>
-          <tbody>${rows || `<tr><td colspan="11">No hay registros para este reporte.</td></tr>`}</tbody>
+          <tbody>${rows || `<tr><td colspan="12">No hay registros para este reporte.</td></tr>`}</tbody>
         </table>
       </body>
     </html>
@@ -1059,6 +1064,7 @@ function generatePcReportPdf() {
       <td>${escapeHtml(record.tableNumber)}</td>
       <td>${escapeHtml(record.orderNumber)}</td>
       <td>${escapeHtml(record.neighborhood)}</td>
+      <td>${escapeHtml(record.blockNumber)}</td>
       <td>${escapeHtml(statusLabel(record.status))}</td>
       <td>${escapeHtml(benefitLabel(record.benefitType))}</td>
       <td>${money(effectiveAmount(record))}</td>
@@ -1099,13 +1105,14 @@ function generatePcReportPdf() {
               <th>Mesa</th>
               <th>Orden</th>
               <th>Barrio/compania</th>
+              <th>Manzana</th>
               <th>Estado</th>
               <th>Tipo</th>
               <th>Monto</th>
               <th>Marcado por</th>
             </tr>
           </thead>
-          <tbody>${rows || `<tr><td colspan="11">No hay registros marcados como Paso por PC.</td></tr>`}</tbody>
+          <tbody>${rows || `<tr><td colspan="12">No hay registros marcados como Paso por PC.</td></tr>`}</tbody>
         </table>
       </body>
     </html>
