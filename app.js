@@ -9,6 +9,8 @@ const appScreen = document.querySelector("#appScreen");
 const loginForm = document.querySelector("#loginForm");
 const loginUsername = document.querySelector("#loginUsername");
 const loginPassword = document.querySelector("#loginPassword");
+const loginSubmit = document.querySelector("#loginSubmit");
+const loginLoading = document.querySelector("#loginLoading");
 const loginError = document.querySelector("#loginError");
 const adminPanel = document.querySelector("#adminPanel");
 const userForm = document.querySelector("#userForm");
@@ -793,6 +795,14 @@ async function login(username, password) {
   return true;
 }
 
+function setLoginLoading(isLoading) {
+  loginSubmit.disabled = isLoading;
+  loginUsername.disabled = isLoading;
+  loginPassword.disabled = isLoading;
+  loginSubmit.textContent = isLoading ? "Ingresando..." : "Entrar";
+  loginLoading.hidden = !isLoading;
+}
+
 async function createOperator(firstName, lastName, username, password, functionName, functionDescription) {
   const cleanFirstName = normalize(firstName);
   const cleanLastName = normalize(lastName);
@@ -1399,13 +1409,16 @@ document.querySelector("#printPcReport").addEventListener("click", generatePcRep
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const username = normalize(loginUsername.value);
+  setLoginLoading(true);
+  loginError.hidden = true;
   try {
     await login(username, loginPassword.value);
-    loginError.hidden = true;
   } catch {
     loginError.hidden = false;
     registerAction("Intento fallido de ingreso", `Usuario: ${username || "sin usuario"}`);
     return;
+  } finally {
+    setLoginLoading(false);
   }
   loginForm.reset();
   renderAuth();

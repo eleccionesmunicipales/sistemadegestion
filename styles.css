@@ -299,6 +299,23 @@ h2::after {
   color: #9f0b17;
   font-weight: 800;
 }
+.login-loading {
+  margin: .9rem 0 0;
+  color: #2a1717;
+  font-weight: 800;
+}
+.login-loading::before {
+  content: "";
+  display: inline-block;
+  width: .85rem;
+  height: .85rem;
+  margin-right: .45rem;
+  border: 2px solid rgba(210, 15, 31, .22);
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  vertical-align: -.12rem;
+  animation: spin .75s linear infinite;
+}
 .login-help {
   margin: .9rem 0 0;
   color: #7a1018;
@@ -442,7 +459,19 @@ button {
 .danger { background: rgba(255,82,97,.15); color: #ff9aa3; border: 1px solid rgba(255,82,97,.25); }
 button { transition: transform .18s ease, box-shadow .18s ease, filter .18s ease; }
 button:hover { filter: brightness(1.08); transform: translateY(-1px); }
+button:disabled {
+  cursor: wait;
+  opacity: .72;
+}
+button:disabled:hover {
+  filter: none;
+  transform: none;
+}
 .primary:hover { box-shadow: 0 14px 36px var(--glow); }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 
 .hint, .empty { color: var(--muted); }
 .hint { margin: .9rem 0 0; font-size: .9rem; }

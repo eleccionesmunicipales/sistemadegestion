@@ -23,8 +23,9 @@
           <label>Contraseña
             <input id="loginPassword" type="password" autocomplete="current-password" required>
           </label>
-          <button class="primary" type="submit">Entrar</button>
+          <button id="loginSubmit" class="primary" type="submit">Entrar</button>
         </form>
+        <p id="loginLoading" class="login-loading" hidden>Ingresando, espere un momento...</p>
         <p id="loginError" class="login-error" hidden>Usuario o contraseña incorrectos.</p>
       </section>
     </main>
