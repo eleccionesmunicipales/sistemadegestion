@@ -45,6 +45,7 @@ const emptyState = document.querySelector("#emptyState");
 const search = document.querySelector("#search");
 const filterType = document.querySelector("#filterType");
 const filterPc = document.querySelector("#filterPc");
+const filterVote = document.querySelector("#filterVote");
 const neighborhoodDropdownButton = document.querySelector("#neighborhoodDropdownButton");
 const neighborhoodDropdown = document.querySelector("#neighborhoodDropdown");
 const neighborhoodFilters = document.querySelectorAll("[data-neighborhood-filter]");
@@ -324,7 +325,11 @@ function repairStoredNames() {
 
 function money(value) {
   if (normalize(value) === "") return "-";
-  return Number(value || 0).toLocaleString("es-PY");
+  return `${Number(value || 0).toLocaleString("es-PY")} Gs`;
+}
+
+function effectiveAmount(record) {
+  return record.benefitType === "pago" ? 100000 : Number(record.amount || 0);
 }
 
 function normalize(value) {
@@ -431,13 +436,14 @@ function getFilteredRecords() {
     const viewType = currentView === "mobile" ? "movil" : currentView === "refund" ? "devolucion" : "";
     const matchesType = viewType ? record.benefitType === viewType : (!filterType.value || record.benefitType === filterType.value);
     const matchesPc = !filterPc.value || (filterPc.value === "si" ? record.passedPc : !record.passedPc);
+    const matchesVote = !filterVote.value || (filterVote.value === "si" ? record.voted : !record.voted);
     const matchesNeighborhood = !selectedNeighborhoods.length || selectedNeighborhoods.includes(normalize(record.neighborhood).toUpperCase());
     const text = [record.firstNames, fixNameText(record.firstNames), record.lastNames, fixNameText(record.lastNames), record.fullName, fixNameText(record.fullName), record.birthDate, record.sex, record.documentNumber, record.pollingPlace, record.tableNumber, record.orderNumber, record.city, record.neighborhood, record.mobileType, record.status, record.blockNumber, record.voted ? "voto" : "no voto"]
       .join(" ")
       .replace(/ñ/g, "n");
     const normalizedText = normalizeKey(text);
     const matchesSearch = terms.every((term) => normalizedText.includes(term));
-    return matchesType && matchesPc && matchesNeighborhood && matchesSearch;
+    return matchesType && matchesPc && matchesVote && matchesNeighborhood && matchesSearch;
   });
 }
 
@@ -462,10 +468,10 @@ function renderStats() {
   document.querySelector("#totalVoters").textContent = records.length;
   document.querySelector("#pcCount").textContent = records.filter((record) => record.passedPc).length;
   document.querySelector("#budgetedAmount").textContent = money(records.reduce((sum, record) => {
-    return record.passedPc ? sum : sum + Number(record.amount || 0);
+    return sum + effectiveAmount(record);
   }, 0));
   document.querySelector("#paidAmount").textContent = money(records.reduce((sum, record) => {
-    return record.passedPc ? sum + Number(record.amount || 0) : sum;
+    return record.passedPc ? sum + effectiveAmount(record) : sum;
   }, 0));
   document.querySelector("#mobileCount").textContent = records.filter((record) => record.benefitType === "movil").length;
   document.querySelector("#refundCount").textContent = records.filter((record) => record.benefitType === "devolucion").length;
@@ -478,8 +484,8 @@ function getSummaryRecords(type) {
   return {
     all: records,
     pc: records.filter((record) => record.passedPc),
-    budgeted: records.filter((record) => !record.passedPc && Number(record.amount || 0) > 0),
-    paid: records.filter((record) => record.passedPc && Number(record.amount || 0) > 0),
+    budgeted: records.filter((record) => effectiveAmount(record) > 0),
+    paid: records.filter((record) => record.passedPc && effectiveAmount(record) > 0),
     mobile: records.filter((record) => record.benefitType === "movil"),
     refund: records.filter((record) => record.benefitType === "devolucion"),
     payment: records.filter((record) => record.benefitType === "pago"),
@@ -513,7 +519,7 @@ function renderSummaryDetail() {
       <td>${escapeHtml(fixNameText(record.lastNames))}</td>
       <td>${escapeHtml(record.documentNumber)}</td>
       <td>${escapeHtml(benefitLabel(record.benefitType) || "-")}</td>
-      <td>${money(record.amount)}</td>
+      <td>${money(effectiveAmount(record))}</td>
       <td>${escapeHtml(record.neighborhood)}</td>
       <td><span class="pill ${record.passedPc ? "pc-yes" : "pc-no"}">${record.passedPc ? "Si" : "No"}</span></td>
     </tr>
@@ -674,7 +680,7 @@ function generateBenefitPdf(type, title) {
       <td>${escapeHtml(statusLabel(record.status))}</td>
       <td>${escapeHtml(benefitLabel(record.benefitType) || "-")}</td>
       <td>${escapeHtml(getDetail(record))}</td>
-      <td>${money(record.amount)}</td>
+      <td>${money(effectiveAmount(record))}</td>
     </tr>
   `).join("");
   const printWindow = window.open("", "_blank");
@@ -1055,7 +1061,7 @@ function generatePcReportPdf() {
       <td>${escapeHtml(record.neighborhood)}</td>
       <td>${escapeHtml(statusLabel(record.status))}</td>
       <td>${escapeHtml(benefitLabel(record.benefitType))}</td>
-      <td>${money(record.amount)}</td>
+      <td>${money(effectiveAmount(record))}</td>
       <td>${escapeHtml(record.pcMarkedBy || "Sin dato")}</td>
     </tr>
   `).join("");
@@ -1176,7 +1182,7 @@ function operationsRow(record) {
     <td>${escapeHtml(record.neighborhood)}</td>
     <td>${escapeHtml(record.blockNumber)}</td>
     <td><span class="pill status-${statusValue(record.status)}">${statusLabel(record.status)}</span></td>
-    <td>${money(record.amount)}</td>
+    <td>${money(effectiveAmount(record))}</td>
     <td><span class="pill ${record.passedPc ? "pc-yes" : "pc-no"}">${record.passedPc ? "Si" : "No"}</span></td>
     <td class="actions">
       <button class="row-button vote-toggle ${record.voted ? "voted" : "not-voted"}" data-action="toggle-voted" data-id="${record.id}" type="button">${record.voted ? "VOTO" : "NO VOTO"}</button>
@@ -1209,7 +1215,7 @@ function refundRow(record) {
     <td>${escapeHtml(fixNameText(record.lastNames))}</td>
     <td>${escapeHtml(record.documentNumber)}</td>
     <td>${escapeHtml(record.city || "Sin ciudad")}</td>
-    <td>${money(record.amount)}</td>
+    <td>${money(effectiveAmount(record))}</td>
     <td>${escapeHtml(record.neighborhood)}</td>
     <td>${escapeHtml(record.pollingPlace)}</td>
     <td>${escapeHtml(record.tableNumber)}</td>
@@ -1387,7 +1393,7 @@ function exportCsv() {
     record.tableNumber,
     record.orderNumber,
     record.benefitType,
-    record.amount,
+    effectiveAmount(record),
     record.city,
     record.mobileType,
     record.passedPc ? "si" : "no",
@@ -1508,7 +1514,7 @@ document.addEventListener("click", (event) => {
   neighborhoodDropdown.hidden = true;
   neighborhoodDropdownButton.setAttribute("aria-expanded", "false");
 });
-[search, filterType, filterPc].forEach((item) => item.addEventListener("input", renderTable));
+[search, filterType, filterPc, filterVote].forEach((item) => item.addEventListener("input", renderTable));
 neighborhoodFilters.forEach((item) => {
   item.addEventListener("change", () => {
     updateNeighborhoodDropdownLabel();
