@@ -66,6 +66,7 @@
             <select id="newFunction" required>
               <option value="">Seleccione</option>
               <option value="Sistema de Gestion">Sistema de Gestion</option>
+              <option value="Veedor">Veedor</option>
               <option value="Moviles">Moviles</option>
               <option value="Devolucion de Pasaje">Devolucion de Pasaje</option>
               <option value="Admin">Admin</option>
@@ -73,6 +74,16 @@
           </label>
           <label>Descripcion de funcion
             <input id="newFunctionDescription" type="text" autocomplete="off" placeholder="Ej.: Barrio Fatima" required>
+          </label>
+          <label id="watcherPollingPlaceLabel" hidden>Local de votacion del veedor
+            <select id="newWatcherPollingPlace">
+              <option value="">Seleccione local</option>
+            </select>
+          </label>
+          <label id="watcherTableNumberLabel" hidden>Mesa del veedor
+            <select id="newWatcherTableNumber">
+              <option value="">Seleccione mesa</option>
+            </select>
           </label>
           <button class="primary" type="submit">Crear usuario</button>
         </form>

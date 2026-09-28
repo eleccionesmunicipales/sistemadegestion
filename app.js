@@ -20,6 +20,10 @@ const newUsername = document.querySelector("#newUsername");
 const newPassword = document.querySelector("#newPassword");
 const newFunction = document.querySelector("#newFunction");
 const newFunctionDescription = document.querySelector("#newFunctionDescription");
+const watcherPollingPlaceLabel = document.querySelector("#watcherPollingPlaceLabel");
+const watcherTableNumberLabel = document.querySelector("#watcherTableNumberLabel");
+const newWatcherPollingPlace = document.querySelector("#newWatcherPollingPlace");
+const newWatcherTableNumber = document.querySelector("#newWatcherTableNumber");
 const userMessage = document.querySelector("#userMessage");
 const usersList = document.querySelector("#usersList");
 const logoutButton = document.querySelector("#logoutButton");
@@ -48,6 +52,7 @@ const filterPc = document.querySelector("#filterPc");
 const filterVote = document.querySelector("#filterVote");
 const neighborhoodDropdownButton = document.querySelector("#neighborhoodDropdownButton");
 const neighborhoodDropdown = document.querySelector("#neighborhoodDropdown");
+const neighborhoodFilterDropdown = document.querySelector(".filter-dropdown");
 const neighborhoodFilters = document.querySelectorAll("[data-neighborhood-filter]");
 const tableHead = document.querySelector("#tableHead");
 const tableTitle = document.querySelector("#tableTitle");
@@ -92,6 +97,7 @@ let currentView = "operations";
 let bulkEditorOpen = false;
 let selectedSummary = "";
 let selectedNeighborhoodSummary = "";
+const pendingVoteUpdates = new Map();
 let lastRecordsJson = localStorage.getItem(STORAGE_KEY) || "";
 let lastUsersJson = localStorage.getItem(USERS_KEY) || "";
 let lastAuditJson = localStorage.getItem(AUDIT_KEY) || "";
@@ -144,14 +150,29 @@ async function apiRequest(path, options = {}) {
 }
 
 async function loadRemoteData() {
-  records = repairLoadedRecords(await apiRequest("/api/records"));
   if (isAdmin()) {
-    users = await apiRequest("/api/users");
-    auditLog = await apiRequest("/api/audit");
+    const [remoteRecords, remoteUsers, remoteAuditLog] = await Promise.all([
+      apiRequest("/api/records"),
+      apiRequest("/api/users"),
+      apiRequest("/api/audit"),
+    ]);
+    records = repairLoadedRecords(remoteRecords);
+    users = remoteUsers;
+    auditLog = remoteAuditLog;
   } else {
+    records = repairLoadedRecords(await apiRequest("/api/records"));
     users = [currentUser];
     auditLog = [];
   }
+  applyPendingVoteUpdates();
+  renderWatcherPollingPlaceOptions();
+}
+
+function applyPendingVoteUpdates() {
+  if (!pendingVoteUpdates.size) return;
+  records = records.map((record) => pendingVoteUpdates.has(record.id)
+    ? { ...record, voted: pendingVoteUpdates.get(record.id) }
+    : record);
 }
 
 async function migrateLocalRecordsIfNeeded(localRecords) {
@@ -268,6 +289,64 @@ function isAdmin() {
   return currentUser?.role === "admin";
 }
 
+function isWatcher(user = currentUser) {
+  return normalizeKey(user?.functionName).includes("veedor");
+}
+
+function watcherDescription(pollingPlace, tableNumber) {
+  return `Local: ${normalize(pollingPlace)} | Mesa: ${normalize(tableNumber)}`;
+}
+
+function localCompareNumeric(a, b) {
+  return String(a).localeCompare(String(b), "es", { numeric: true, sensitivity: "base" });
+}
+
+function watcherPollingPlaces() {
+  const byKey = new Map();
+  records.forEach((record) => {
+    const pollingPlace = normalize(record.pollingPlace);
+    if (!pollingPlace) return;
+    const key = normalizeKey(pollingPlace);
+    if (!byKey.has(key)) byKey.set(key, pollingPlace);
+  });
+  return Array.from(byKey.values()).sort(localCompareNumeric);
+}
+
+function watcherTablesForPollingPlace(pollingPlace) {
+  const pollingPlaceKey = normalizeKey(pollingPlace);
+  const byKey = new Map();
+  records.forEach((record) => {
+    if (normalizeKey(record.pollingPlace) !== pollingPlaceKey) return;
+    const tableNumber = normalize(record.tableNumber);
+    if (!tableNumber) return;
+    const key = normalizeKey(tableNumber).replace(/^mesa\s*/, "");
+    if (!byKey.has(key)) byKey.set(key, tableNumber);
+  });
+  return Array.from(byKey.values()).sort(localCompareNumeric);
+}
+
+function renderWatcherTableOptions() {
+  const selectedTable = newWatcherTableNumber.value;
+  const options = watcherTablesForPollingPlace(newWatcherPollingPlace.value);
+  newWatcherTableNumber.innerHTML = `
+    <option value="">Seleccione mesa</option>
+    ${options.map((tableNumber) => `<option value="${escapeHtml(tableNumber)}">${escapeHtml(tableNumber)}</option>`).join("")}
+  `;
+  if (options.includes(selectedTable)) newWatcherTableNumber.value = selectedTable;
+  newWatcherTableNumber.disabled = !newWatcherPollingPlace.value || !options.length;
+}
+
+function renderWatcherPollingPlaceOptions() {
+  const selectedPollingPlace = newWatcherPollingPlace.value;
+  const options = watcherPollingPlaces();
+  newWatcherPollingPlace.innerHTML = `
+    <option value="">Seleccione local</option>
+    ${options.map((pollingPlace) => `<option value="${escapeHtml(pollingPlace)}">${escapeHtml(pollingPlace)}</option>`).join("")}
+  `;
+  if (options.includes(selectedPollingPlace)) newWatcherPollingPlace.value = selectedPollingPlace;
+  renderWatcherTableOptions();
+}
+
 function loadRecords() {
   try {
     return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
@@ -346,6 +425,7 @@ function normalizeKey(value) {
 function allowedViewsForUser(user) {
   if (!user) return [];
   if (user.role === "admin") return ["operations", "summary", "mobile", "refund", "survey", "exitPoll", "users", "report"];
+  if (isWatcher(user)) return ["operations"];
 
   const allowed = ["operations"];
   const functionKey = normalizeKey(user.functionName);
@@ -359,6 +439,7 @@ function canAccessView(view) {
 }
 
 function viewLabel(view) {
+  if (view === "operations" && isWatcher()) return "Control de voto";
   return {
     operations: "Sistema de Gestion",
     summary: "Resumen",
@@ -819,7 +900,13 @@ async function createOperator(firstName, lastName, username, password, functionN
   const cleanLastName = normalize(lastName);
   const cleanUsername = normalize(username);
   const cleanFunctionName = normalize(functionName);
-  const cleanFunctionDescription = normalize(functionDescription);
+  let cleanFunctionDescription = normalize(functionDescription);
+  if (normalizeKey(cleanFunctionName).includes("veedor")) {
+    const pollingPlace = normalize(newWatcherPollingPlace.value);
+    const tableNumber = normalize(newWatcherTableNumber.value);
+    if (!pollingPlace || !tableNumber) return "Complete el local de votacion y la mesa del veedor.";
+    cleanFunctionDescription = watcherDescription(pollingPlace, tableNumber);
+  }
   if (!cleanFirstName || !cleanLastName || !cleanUsername || !password || !cleanFunctionName || !cleanFunctionDescription) return "Complete todos los campos.";
   if (users.some((user) => user.username.toLowerCase() === cleanUsername.toLowerCase())) {
     return "Ese usuario ya existe.";
@@ -878,25 +965,26 @@ function renderViewChrome() {
   const usersView = currentView === "users";
   const reportView = currentView === "report";
   const summaryView = currentView === "summary";
-  tableTitle.textContent = {
+  tableTitle.textContent = isWatcher() ? "Control de voto" : ({
     operations: "Sistema de Gestion",
     summary: "Resumen",
     mobile: "Moviles",
     refund: "Devolucion de Pasaje",
     report: "Reporte",
-  }[currentView] || "Sistema de Gestion";
+  }[currentView] || "Sistema de Gestion");
   toolsPanel.hidden = exitPoll || survey || usersView || reportView || summaryView;
   tablePanel.hidden = exitPoll || survey || usersView || reportView || summaryView;
   printMobilePdf.hidden = currentView !== "mobile";
   printRefundPdf.hidden = currentView !== "refund";
-  printPaymentPdf.hidden = currentView !== "operations";
+  printPaymentPdf.hidden = currentView !== "operations" || isWatcher();
+  neighborhoodFilterDropdown.hidden = isWatcher();
   exitPollPanel.hidden = !exitPoll;
   surveyPanel.hidden = !survey;
   reportPanel.hidden = !reportView;
   summaryPanel.hidden = !summaryView;
   adminPanel.hidden = !usersView || !isAdmin();
   tablePanel.classList.toggle("operations", !exitPoll && !survey);
-  bulkTools.hidden = exitPoll || survey || usersView || reportView || summaryView || !bulkEditorOpen;
+  bulkTools.hidden = exitPoll || survey || usersView || reportView || summaryView || isWatcher() || !bulkEditorOpen;
   const selected = records.filter((record) => selectedRecords.has(record.id));
   editModeHint.textContent = selected.length === 1
     ? `Editando: ${fixNameText(selected[0].lastNames)} ${fixNameText(selected[0].firstNames)} - CI ${selected[0].documentNumber}`
@@ -908,9 +996,19 @@ function renderViewChrome() {
     button.classList.toggle("active", button.dataset.viewButton === currentView);
   });
   viewOnlyControls.forEach((control) => {
-    control.hidden = control.dataset.viewOnly !== currentView;
+    control.hidden = control.dataset.viewOnly !== currentView || isWatcher();
   });
-  tableHead.innerHTML = currentView === "mobile" ? `
+  tableHead.innerHTML = isWatcher() ? `
+    <tr>
+      <th>Cedula</th>
+      <th>Nombre completo</th>
+      <th>Fecha de nacimiento</th>
+      <th>Lugar de votacion</th>
+      <th>Mesa</th>
+      <th>Orden</th>
+      <th>Voto</th>
+    </tr>
+  ` : currentView === "mobile" ? `
     <tr>
       <th class="name-col">Nombres</th>
       <th class="name-col">Apellidos</th>
@@ -1176,6 +1274,8 @@ function chartLegendItem(label, count, percent, className) {
 }
 
 function operationsRow(record) {
+  if (isWatcher()) return watcherRow(record);
+
   return `
     <td class="name-cell">${escapeHtml(fixNameText(record.firstNames || record.fullName || ""))}</td>
     <td class="name-cell">${escapeHtml(fixNameText(record.lastNames))}</td>
@@ -1194,6 +1294,21 @@ function operationsRow(record) {
     <td class="actions">
       <button class="row-button vote-toggle ${record.voted ? "voted" : "not-voted"}" data-action="toggle-voted" data-id="${record.id}" type="button">${record.voted ? "VOTO" : "NO VOTO"}</button>
       <button class="row-button" data-action="edit" data-id="${record.id}" type="button">Editar</button>
+    </td>
+  `;
+}
+
+function watcherRow(record) {
+  const fullName = [fixNameText(record.lastNames), fixNameText(record.firstNames || record.fullName || "")].filter(Boolean).join(" ");
+  return `
+    <td class="document-cell">${escapeHtml(record.documentNumber)}</td>
+    <td class="name-cell">${escapeHtml(fullName)}</td>
+    <td>${escapeHtml(formatDate(record.birthDate))}</td>
+    <td>${escapeHtml(record.pollingPlace)}</td>
+    <td>${escapeHtml(record.tableNumber)}</td>
+    <td>${escapeHtml(record.orderNumber)}</td>
+    <td class="actions">
+      <button class="row-button vote-toggle ${record.voted ? "voted" : "not-voted"}" data-action="toggle-voted" data-id="${record.id}" type="button">${record.voted ? "VOTO" : "NO VOTO"}</button>
     </td>
   `;
 }
@@ -1257,6 +1372,7 @@ recordsBody.addEventListener("click", (event) => {
   }
 
   if (button.dataset.action === "edit") {
+    if (isWatcher()) return;
     selectedRecords.clear();
     selectedRecords.add(record.id);
     bulkEditorOpen = true;
@@ -1279,7 +1395,9 @@ function resetBulkFields() {
 
 async function toggleVoted(record) {
   const previousRecords = records;
-  records = records.map((item) => item.id === record.id ? { ...item, voted: !item.voted } : item);
+  const nextVoted = !record.voted;
+  pendingVoteUpdates.set(record.id, nextVoted);
+  records = records.map((item) => item.id === record.id ? { ...item, voted: nextVoted } : item);
   saveRecords();
   renderTable();
 
@@ -1288,7 +1406,11 @@ async function toggleVoted(record) {
       method: "POST",
       body: JSON.stringify({ records: records.filter((item) => item.id === record.id) }),
     });
+    pendingVoteUpdates.delete(record.id);
+    await loadRemoteData();
+    renderTable();
   } catch (error) {
+    pendingVoteUpdates.delete(record.id);
     records = previousRecords;
     saveRecords();
     renderTable();
@@ -1445,7 +1567,22 @@ userForm.addEventListener("submit", async (event) => {
   }
   userMessage.hidden = false;
   userForm.reset();
+  updateWatcherFields();
 });
+function updateWatcherFields() {
+  const watcherSelected = normalizeKey(newFunction.value).includes("veedor");
+  watcherPollingPlaceLabel.hidden = !watcherSelected;
+  watcherTableNumberLabel.hidden = !watcherSelected;
+  newWatcherPollingPlace.required = watcherSelected;
+  newWatcherTableNumber.required = watcherSelected;
+  newFunctionDescription.required = !watcherSelected;
+  newFunctionDescription.disabled = watcherSelected;
+  newFunctionDescription.placeholder = watcherSelected ? "Se completa automaticamente con local y mesa" : "Ej.: Barrio Fatima";
+  if (watcherSelected) {
+    newFunctionDescription.value = "Asignado por local y mesa";
+    renderWatcherPollingPlaceOptions();
+  }
+}
 usersList.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-delete-user]");
   if (!button) return;
@@ -1511,6 +1648,8 @@ document.querySelector("#clearBulkFields").addEventListener("click", clearSelect
 bulkFields.benefitType.addEventListener("change", () => {
   if (bulkFields.benefitType.value === "pago") bulkFields.amount.value = "100000";
 });
+newFunction.addEventListener("change", updateWatcherFields);
+newWatcherPollingPlace.addEventListener("change", renderWatcherTableOptions);
 neighborhoodDropdownButton.addEventListener("click", () => {
   const isOpen = neighborhoodDropdown.hidden;
   neighborhoodDropdown.hidden = !isOpen;
@@ -1535,4 +1674,5 @@ window.addEventListener("storage", (event) => {
 setInterval(syncLiveData, 1000);
 
 updateNeighborhoodDropdownLabel();
+updateWatcherFields();
 renderAuth();

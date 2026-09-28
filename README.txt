@@ -30,6 +30,7 @@ Vistas
 - Moviles: muestra la lista y detalle de quienes estan marcados como movil completo o parcial.
 - Devolucion de Pasaje: muestra la lista y detalle de quienes tienen devolucion de pasaje.
 - Usuarios: permite al administrador crear operadores con nombre, apellido, usuario, contraseña, funcion a cumplir y descripcion de funcion.
+- Al crear un usuario con funcion Veedor, el administrador selecciona local de votacion y mesa. Ese usuario solo ve su mesa asignada y solo puede marcar VOTO/NO VOTO.
 - El administrador ve todas las vistas del sistema y puede ver la contraseña creada para cada operador.
 - Si al crear un usuario se elige la funcion Admin, ese usuario tambien tendra acceso completo de administrador.
 - Los operadores ven Sistema de Gestion. Si su funcion contiene Moviles, tambien ven Moviles. Si su funcion contiene Devolucion de Pasaje, tambien ven Devolucion de Pasaje.

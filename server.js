@@ -62,6 +62,21 @@ function toRecord(row) {
   };
 }
 
+function toWatcherRecord(row) {
+  return {
+    id: row.id,
+    firstNames: row.first_names,
+    lastNames: row.last_names,
+    fullName: row.full_name,
+    birthDate: row.birth_date,
+    documentNumber: row.document_number,
+    pollingPlace: row.polling_place,
+    tableNumber: row.table_number,
+    orderNumber: row.order_number,
+    voted: Boolean(row.voted),
+  };
+}
+
 function fromRecord(record, username = "", existingRecord = null) {
   const existingPcMarkedBy = existingRecord?.pc_marked_by || existingRecord?.pcMarkedBy || "";
   return {
@@ -107,11 +122,13 @@ async function fetchAllRecords(filter = null) {
   while (true) {
     let query = supabase
       .from("records")
-      .select("*")
+      .select(filter?.select || "*")
       .order("last_names", { ascending: true })
       .range(from, from + pageSize - 1);
 
     if (filter?.passedPc === true) query = query.eq("passed_pc", true);
+    if (filter?.pollingPlace) query = query.eq("polling_place", filter.pollingPlace);
+    if (filter?.tableNumber) query = query.eq("table_number", filter.tableNumber);
 
     const { data, error } = await query;
     if (error) throw error;
@@ -122,6 +139,16 @@ async function fetchAllRecords(filter = null) {
   }
 
   return allRows;
+}
+
+async function fetchWatcherRecords(user) {
+  const assignment = parseWatcherAssignment(user.function_description);
+  if (!assignment.pollingPlace || !assignment.tableNumber) return [];
+  return fetchAllRecords({
+    pollingPlace: assignment.pollingPlace,
+    tableNumber: assignment.tableNumber,
+    select: "id, first_names, last_names, full_name, birth_date, document_number, polling_place, table_number, order_number, voted",
+  });
 }
 
 function requireAuth(req, res, next) {
@@ -137,6 +164,34 @@ function requireAuth(req, res, next) {
 function requireAdmin(req, res, next) {
   if (req.user.role !== "admin") return res.status(403).json({ error: "Solo administrador" });
   next();
+}
+
+function normalizeKey(value) {
+  return String(value || "")
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function isWatcher(user) {
+  return normalizeKey(user.function_name).includes("veedor");
+}
+
+function parseWatcherAssignment(description) {
+  const text = String(description || "").trim();
+  const labeledMatch = text.match(/local\s*:\s*(.*?)\s*\|\s*mesa\s*:\s*(.+)$/i);
+  if (labeledMatch) {
+    return { pollingPlace: labeledMatch[1].trim(), tableNumber: labeledMatch[2].trim() };
+  }
+
+  const pipeParts = text.split("|").map((part) => part.trim()).filter(Boolean);
+  if (pipeParts.length >= 2) return { pollingPlace: pipeParts[0], tableNumber: pipeParts[1].replace(/^mesa\s*:?\s*/i, "").trim() };
+
+  const mesaMatch = text.match(/^(.*?)\s+mesa\s*:?\s*(.+)$/i);
+  if (mesaMatch) return { pollingPlace: mesaMatch[1].trim(), tableNumber: mesaMatch[2].trim() };
+
+  return { pollingPlace: "", tableNumber: "" };
 }
 
 app.get("/api/health", (req, res) => {
@@ -231,6 +286,11 @@ app.delete("/api/users/:username", requireAuth, requireAdmin, async (req, res) =
 
 app.get("/api/records", requireAuth, async (req, res) => {
   try {
+    if (isWatcher(req.user)) {
+      const data = await fetchWatcherRecords(req.user);
+      return res.json(data.map(toWatcherRecord));
+    }
+
     const data = await fetchAllRecords();
     res.json(data.map(toRecord));
   } catch (error) {
@@ -239,6 +299,7 @@ app.get("/api/records", requireAuth, async (req, res) => {
 });
 
 app.put("/api/records/:id", requireAuth, async (req, res) => {
+  if (isWatcher(req.user)) return res.status(403).json({ error: "Los veedores solo pueden marcar VOTO/NO VOTO" });
   const { data: existing } = await supabase.from("records").select("id, passed_pc, pc_marked_by").eq("id", req.params.id).maybeSingle();
   const payload = fromRecord({ ...req.body, id: req.params.id }, req.user.username, existing);
   const { data, error } = await supabase.from("records").upsert(payload).select("*").single();
@@ -250,6 +311,29 @@ app.put("/api/records/:id", requireAuth, async (req, res) => {
 app.post("/api/records/bulk", requireAuth, async (req, res) => {
   const records = Array.isArray(req.body.records) ? req.body.records : [];
   const ids = records.map((record) => String(record.id));
+  if (!ids.length) return res.json({ ok: true, count: 0 });
+
+  if (isWatcher(req.user)) {
+    const data = await fetchWatcherRecords(req.user);
+    const allowedIds = new Set(data.map((record) => String(record.id)));
+    if (ids.some((id) => !allowedIds.has(id))) {
+      return res.status(403).json({ error: "El veedor solo puede marcar su local y mesa asignados" });
+    }
+
+    const incomingById = new Map(records.map((record) => [String(record.id), Boolean(record.voted)]));
+    for (const id of ids) {
+      const { data: updatedRows, error } = await supabase
+        .from("records")
+        .update({ voted: incomingById.get(id), updated_by: req.user.username })
+        .eq("id", id)
+        .select("id");
+      if (error) return res.status(400).json({ error: error.message });
+      if (!updatedRows?.length) return res.status(404).json({ error: "No se encontro el registro para marcar voto" });
+    }
+    await writeAudit(req.user, "Marco voto", `${ids.length} registro(s) actualizados por veedor`);
+    return res.json({ ok: true, count: ids.length });
+  }
+
   const { data: existingRows, error: existingError } = await supabase.from("records").select("id, passed_pc, pc_marked_by").in("id", ids);
   if (existingError) return res.status(400).json({ error: existingError.message });
   const existingById = new Map((existingRows || []).map((record) => [record.id, record]));
