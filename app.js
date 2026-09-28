@@ -3,6 +3,8 @@ const USERS_KEY = "padron-electoral-usuarios";
 const SESSION_KEY = "padron-electoral-sesion";
 const AUDIT_KEY = "padron-electoral-auditoria";
 const API_BASE = window.location.origin;
+const LIVE_SYNC_MS = 10000;
+const MAX_RENDERED_ROWS = 400;
 
 const loginScreen = document.querySelector("#loginScreen");
 const appScreen = document.querySelector("#appScreen");
@@ -98,6 +100,8 @@ let bulkEditorOpen = false;
 let selectedSummary = "";
 let selectedNeighborhoodSummary = "";
 const pendingVoteUpdates = new Map();
+let isSyncingRemoteData = false;
+let lastRemoteRecordsVersion = "";
 let lastRecordsJson = localStorage.getItem(STORAGE_KEY) || "";
 let lastUsersJson = localStorage.getItem(USERS_KEY) || "";
 let lastAuditJson = localStorage.getItem(AUDIT_KEY) || "";
@@ -149,23 +153,47 @@ async function apiRequest(path, options = {}) {
   return data;
 }
 
-async function loadRemoteData() {
-  if (isAdmin()) {
-    const [remoteRecords, remoteUsers, remoteAuditLog] = await Promise.all([
-      apiRequest("/api/records"),
+async function loadRemoteData({ includeAdminData = false } = {}) {
+  const remoteRecords = await apiRequest("/api/records");
+  records = repairLoadedRecords(remoteRecords);
+
+  if (isAdmin() && includeAdminData) {
+    const [remoteUsers, remoteAuditLog] = await Promise.all([
       apiRequest("/api/users"),
       apiRequest("/api/audit"),
     ]);
-    records = repairLoadedRecords(remoteRecords);
     users = remoteUsers;
     auditLog = remoteAuditLog;
-  } else {
-    records = repairLoadedRecords(await apiRequest("/api/records"));
+  } else if (!isAdmin()) {
     users = [currentUser];
     auditLog = [];
   }
+
+  await refreshRemoteRecordsVersion();
   applyPendingVoteUpdates();
   renderWatcherPollingPlaceOptions();
+}
+
+async function refreshRemoteRecordsVersion({ save = true } = {}) {
+  const version = await apiRequest("/api/records/version");
+  const recordsVersion = `${version.count || 0}:${version.updatedAt || ""}`;
+  if (save) lastRemoteRecordsVersion = recordsVersion;
+  return recordsVersion;
+}
+
+async function loadAdminViewData() {
+  if (!isAdmin()) return false;
+  if (currentView === "users") {
+    users = await apiRequest("/api/users");
+    renderUsersList();
+    return true;
+  }
+  if (currentView === "report") {
+    auditLog = await apiRequest("/api/audit");
+    renderReport();
+    return true;
+  }
+  return false;
 }
 
 function applyPendingVoteUpdates() {
@@ -222,14 +250,28 @@ function registerAction(action, detail = "") {
 
 async function syncLiveData() {
   if (authToken && currentUser) {
+    if (isSyncingRemoteData) return;
+    isSyncingRemoteData = true;
     try {
-      await loadRemoteData();
-      if (!canAccessView(currentView)) currentView = "operations";
-      renderUsersList();
-      renderTable();
+      let shouldRender = false;
+      const remoteVersion = await refreshRemoteRecordsVersion({ save: false });
+      if (remoteVersion !== lastRemoteRecordsVersion || pendingVoteUpdates.size) {
+        await loadRemoteData({ includeAdminData: false });
+        shouldRender = true;
+      }
+      if (isAdmin() && (currentView === "users" || currentView === "report")) {
+        shouldRender = await loadAdminViewData() || shouldRender;
+      }
+      if (!canAccessView(currentView)) {
+        currentView = "operations";
+        shouldRender = true;
+      }
+      if (shouldRender) renderTable();
       if (currentView === "report") renderReport();
     } catch {
       // Keep the current screen usable if the network is momentarily unavailable.
+    } finally {
+      isSyncingRemoteData = false;
     }
     return;
   }
@@ -546,6 +588,7 @@ function getFilteredRecordIds() {
 }
 
 function renderStats() {
+  if (currentView !== "summary") return;
   document.querySelector("#totalVoters").textContent = records.length;
   document.querySelector("#pcCount").textContent = records.filter((record) => record.passedPc).length;
   document.querySelector("#budgetedAmount").textContent = money(records.reduce((sum, record) => {
@@ -833,7 +876,7 @@ function renderAuth() {
   renderTable();
 }
 
-function switchView(view) {
+async function switchView(view) {
   if (!canAccessView(view)) return;
   const previousView = currentView;
   currentView = view;
@@ -850,6 +893,7 @@ function switchView(view) {
   selectedRecords.clear();
   if (previousView !== currentView) registerAction("Cambio de vista", viewLabel(currentView));
   renderTable();
+  await loadAdminViewData();
 }
 
 function renderUsersList() {
@@ -881,7 +925,7 @@ async function login(username, password) {
   });
   authToken = data.token;
   saveSession(data.user);
-  await loadRemoteData();
+  await loadRemoteData({ includeAdminData: false });
   await migrateLocalRecordsIfNeeded(localRecords);
   currentView = "operations";
   return true;
@@ -948,13 +992,20 @@ function renderTable() {
     return;
   }
   recordsBody.innerHTML = "";
-  emptyState.hidden = filtered.length > 0;
+  const visibleRecords = filtered.slice(0, MAX_RENDERED_ROWS);
+  const hasMoreRecords = filtered.length > MAX_RENDERED_ROWS;
+  emptyState.textContent = hasMoreRecords
+    ? `Mostrando ${MAX_RENDERED_ROWS} de ${filtered.length} registros. Use la busqueda o filtros para acotar la lista.`
+    : "Todavia no hay registros cargados.";
+  emptyState.hidden = filtered.length > 0 && !hasMoreRecords;
 
-  filtered.forEach((record) => {
+  const fragment = document.createDocumentFragment();
+  visibleRecords.forEach((record) => {
     const row = document.createElement("tr");
     row.innerHTML = currentView === "mobile" ? mobileRow(record) : currentView === "refund" ? refundRow(record) : operationsRow(record);
-    recordsBody.appendChild(row);
+    fragment.appendChild(row);
   });
+  recordsBody.appendChild(fragment);
 
   renderStats();
 }
@@ -1671,7 +1722,7 @@ window.addEventListener("storage", (event) => {
   if (![STORAGE_KEY, USERS_KEY, AUDIT_KEY].includes(event.key)) return;
   syncLiveData();
 });
-setInterval(syncLiveData, 1000);
+setInterval(syncLiveData, LIVE_SYNC_MS);
 
 updateNeighborhoodDropdownLabel();
 updateWatcherFields();

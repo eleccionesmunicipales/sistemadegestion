@@ -114,6 +114,13 @@ async function writeAudit(user, action, detail = "") {
   });
 }
 
+function applyRecordFilters(query, filter = null) {
+  if (filter?.passedPc === true) query = query.eq("passed_pc", true);
+  if (filter?.pollingPlace) query = query.eq("polling_place", filter.pollingPlace);
+  if (filter?.tableNumber) query = query.eq("table_number", filter.tableNumber);
+  return query;
+}
+
 async function fetchAllRecords(filter = null) {
   const pageSize = 1000;
   let from = 0;
@@ -126,9 +133,7 @@ async function fetchAllRecords(filter = null) {
       .order("last_names", { ascending: true })
       .range(from, from + pageSize - 1);
 
-    if (filter?.passedPc === true) query = query.eq("passed_pc", true);
-    if (filter?.pollingPlace) query = query.eq("polling_place", filter.pollingPlace);
-    if (filter?.tableNumber) query = query.eq("table_number", filter.tableNumber);
+    query = applyRecordFilters(query, filter);
 
     const { data, error } = await query;
     if (error) throw error;
@@ -141,6 +146,21 @@ async function fetchAllRecords(filter = null) {
   return allRows;
 }
 
+async function fetchRecordsVersion(filter = null) {
+  const countQuery = applyRecordFilters(
+    supabase.from("records").select("id", { count: "exact", head: true }),
+    filter,
+  );
+  const latestQuery = applyRecordFilters(
+    supabase.from("records").select("updated_at").order("updated_at", { ascending: false }).limit(1),
+    filter,
+  );
+  const [{ count, error: countError }, { data, error: latestError }] = await Promise.all([countQuery, latestQuery]);
+  if (countError) throw countError;
+  if (latestError) throw latestError;
+  return { count: count || 0, updatedAt: data?.[0]?.updated_at || "" };
+}
+
 async function fetchWatcherRecords(user) {
   const assignment = parseWatcherAssignment(user.function_description);
   if (!assignment.pollingPlace || !assignment.tableNumber) return [];
@@ -149,6 +169,12 @@ async function fetchWatcherRecords(user) {
     tableNumber: assignment.tableNumber,
     select: "id, first_names, last_names, full_name, birth_date, document_number, polling_place, table_number, order_number, voted",
   });
+}
+
+function watcherFilter(user) {
+  const assignment = parseWatcherAssignment(user.function_description);
+  if (!assignment.pollingPlace || !assignment.tableNumber) return null;
+  return { pollingPlace: assignment.pollingPlace, tableNumber: assignment.tableNumber };
 }
 
 function requireAuth(req, res, next) {
@@ -282,6 +308,16 @@ app.delete("/api/users/:username", requireAuth, requireAdmin, async (req, res) =
   if (error) return res.status(500).json({ error: error.message });
   await writeAudit(req.user, "Elimino usuario", req.params.username);
   res.json({ ok: true });
+});
+
+app.get("/api/records/version", requireAuth, async (req, res) => {
+  try {
+    const filter = isWatcher(req.user) ? watcherFilter(req.user) : null;
+    if (isWatcher(req.user) && !filter) return res.json({ count: 0, updatedAt: "" });
+    res.json(await fetchRecordsVersion(filter));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.get("/api/records", requireAuth, async (req, res) => {
