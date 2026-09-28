@@ -5,6 +5,25 @@ const AUDIT_KEY = "padron-electoral-auditoria";
 const API_BASE = window.location.origin;
 const LIVE_SYNC_MS = 10000;
 const MAX_RENDERED_ROWS = 400;
+const DEFAULT_NEIGHBORHOODS = [
+  "FATIMA",
+  "LOURDES",
+  "MERCEDES",
+  "CAACUPE",
+  "ITACURUBI",
+  "SAN FERNANDO",
+  "TRINIDAD KUE",
+  "TAVAI",
+  "CERRO COSTA",
+  "COSTA POI",
+  "CURUPAYTY",
+  "SAN GERONIMO",
+  "SAN JUAN BERCHMANS",
+  "SAN JORGE",
+  "ARROYO KARE",
+  "SAN ANTONIO",
+  "PARACAU",
+];
 
 const loginScreen = document.querySelector("#loginScreen");
 const appScreen = document.querySelector("#appScreen");
@@ -55,7 +74,7 @@ const filterVote = document.querySelector("#filterVote");
 const neighborhoodDropdownButton = document.querySelector("#neighborhoodDropdownButton");
 const neighborhoodDropdown = document.querySelector("#neighborhoodDropdown");
 const neighborhoodFilterDropdown = document.querySelector(".filter-dropdown");
-const neighborhoodFilters = document.querySelectorAll("[data-neighborhood-filter]");
+let neighborhoodFilters = document.querySelectorAll("[data-neighborhood-filter]");
 const tableHead = document.querySelector("#tableHead");
 const tableTitle = document.querySelector("#tableTitle");
 const tablePanel = document.querySelector(".table-panel");
@@ -70,6 +89,18 @@ const surveyGeneral = document.querySelector("#surveyGeneral");
 const surveyChart = document.querySelector("#surveyChart");
 const surveyBody = document.querySelector("#surveyBody");
 const surveyEmpty = document.querySelector("#surveyEmpty");
+const liderPanel = document.querySelector("#liderPanel");
+const liderStatsPanel = document.querySelector("#liderStatsPanel");
+const liderMayorSurveyGeneral = document.querySelector("#liderMayorSurveyGeneral");
+const liderMayorSurveyChart = document.querySelector("#liderMayorSurveyChart");
+const liderMayorExitPollGeneral = document.querySelector("#liderMayorExitPollGeneral");
+const liderMayorExitPollChart = document.querySelector("#liderMayorExitPollChart");
+const liderGeneral = document.querySelector("#liderGeneral");
+const liderChart = document.querySelector("#liderChart");
+const liderExitPollGeneral = document.querySelector("#liderExitPollGeneral");
+const liderExitPollChart = document.querySelector("#liderExitPollChart");
+const liderBody = document.querySelector("#liderBody");
+const liderEmpty = document.querySelector("#liderEmpty");
 const reportPanel = document.querySelector("#reportPanel");
 const auditLogBody = document.querySelector("#auditLogBody");
 const auditLogEmpty = document.querySelector("#auditLogEmpty");
@@ -171,6 +202,7 @@ async function loadRemoteData({ includeAdminData = false } = {}) {
 
   await refreshRemoteRecordsVersion();
   applyPendingVoteUpdates();
+  renderNeighborhoodFilterOptions();
   renderWatcherPollingPlaceOptions();
 }
 
@@ -263,7 +295,7 @@ async function syncLiveData() {
         shouldRender = await loadAdminViewData() || shouldRender;
       }
       if (!canAccessView(currentView)) {
-        currentView = "operations";
+        currentView = defaultViewForUser();
         shouldRender = true;
       }
       if (shouldRender) renderTable();
@@ -284,6 +316,7 @@ async function syncLiveData() {
   if (recordsJson !== lastRecordsJson) {
     lastRecordsJson = recordsJson;
     records = repairLoadedRecords(loadRecords());
+    renderNeighborhoodFilterOptions();
     lastRecordsJson = localStorage.getItem(STORAGE_KEY) || "";
     selectedRecords.clear();
     bulkEditorOpen = false;
@@ -307,7 +340,7 @@ async function syncLiveData() {
   }
 
   if (!currentUser) return;
-  if (!canAccessView(currentView)) currentView = "operations";
+  if (!canAccessView(currentView)) currentView = defaultViewForUser();
   if (shouldRenderUsers) renderUsersList();
   if (shouldRenderTable || shouldRenderUsers) renderTable();
   if (shouldRenderReport && currentView === "report") renderReport();
@@ -333,6 +366,15 @@ function isAdmin() {
 
 function isWatcher(user = currentUser) {
   return normalizeKey(user?.functionName).includes("veedor");
+}
+
+function isConcejaliaLider(user = currentUser) {
+  const functionKey = normalizeKey(user?.functionName);
+  return functionKey.includes("concejalia") && functionKey.includes("lider");
+}
+
+function defaultViewForUser(user = currentUser) {
+  return allowedViewsForUser(user)[0] || "operations";
 }
 
 function watcherDescription(pollingPlace, tableNumber) {
@@ -412,6 +454,7 @@ function repairLoadedRecords(loadedRecords) {
       ...record,
       voted: Boolean(record.voted),
       blockNumber: normalize(record.blockNumber),
+      statusLider: statusValue(record.statusLider),
     };
     if (firstNames !== normalize(record.firstNames) || lastNames !== normalize(record.lastNames) || fullName !== normalize(record.fullName)) {
       changed = true;
@@ -468,6 +511,7 @@ function allowedViewsForUser(user) {
   if (!user) return [];
   if (user.role === "admin") return ["operations", "summary", "mobile", "refund", "survey", "exitPoll", "users", "report"];
   if (isWatcher(user)) return ["operations"];
+  if (isConcejaliaLider(user)) return ["lider", "liderStats"];
 
   const allowed = ["operations"];
   const functionKey = normalizeKey(user.functionName);
@@ -489,6 +533,8 @@ function viewLabel(view) {
     refund: "Devolucion de Pasaje",
     survey: "Encuesta",
     exitPoll: "Boca de urna",
+    lider: "Anexo Lider",
+    liderStats: "Encuestas Lider",
     users: "Usuarios",
     report: "Reporte",
   }[view] || view;
@@ -561,7 +607,7 @@ function getFilteredRecords() {
     const matchesPc = !filterPc.value || (filterPc.value === "si" ? record.passedPc : !record.passedPc);
     const matchesVote = !filterVote.value || (filterVote.value === "si" ? record.voted : !record.voted);
     const matchesNeighborhood = !selectedNeighborhoods.length || selectedNeighborhoods.includes(normalize(record.neighborhood).toUpperCase());
-    const text = [record.firstNames, fixNameText(record.firstNames), record.lastNames, fixNameText(record.lastNames), record.fullName, fixNameText(record.fullName), record.birthDate, record.sex, record.documentNumber, record.pollingPlace, record.tableNumber, record.orderNumber, record.city, record.neighborhood, record.mobileType, record.status, record.blockNumber, record.voted ? "voto" : "no voto"]
+    const text = [record.firstNames, fixNameText(record.firstNames), record.lastNames, fixNameText(record.lastNames), record.fullName, fixNameText(record.fullName), record.birthDate, record.sex, record.documentNumber, record.pollingPlace, record.tableNumber, record.orderNumber, record.city, record.neighborhood, record.mobileType, record.status, record.statusLider, record.blockNumber, record.voted ? "voto" : "no voto"]
       .join(" ")
       .replace(/ñ/g, "n");
     const normalizedText = normalizeKey(text);
@@ -574,6 +620,28 @@ function getSelectedNeighborhoods() {
   return Array.from(neighborhoodFilters)
     .filter((item) => item.checked)
     .map((item) => item.value);
+}
+
+function renderNeighborhoodFilterOptions() {
+  const selected = new Set(getSelectedNeighborhoods());
+  const byKey = new Map();
+  DEFAULT_NEIGHBORHOODS.forEach((neighborhood) => {
+    byKey.set(normalizeKey(neighborhood), neighborhood);
+  });
+  records.forEach((record) => {
+    const neighborhood = normalize(record.neighborhood).toUpperCase();
+    if (!neighborhood) return;
+    const key = normalizeKey(neighborhood);
+    if (!byKey.has(key)) byKey.set(key, neighborhood);
+  });
+
+  neighborhoodDropdown.innerHTML = Array.from(byKey.values())
+    .sort((a, b) => a.localeCompare(b, "es"))
+    .map((neighborhood) => `
+      <label class="check-row"><input type="checkbox" value="${escapeHtml(neighborhood)}" ${selected.has(neighborhood) ? "checked" : ""} data-neighborhood-filter> ${escapeHtml(neighborhood)}</label>
+    `).join("");
+  neighborhoodFilters = document.querySelectorAll("[data-neighborhood-filter]");
+  updateNeighborhoodDropdownLabel();
 }
 
 function updateNeighborhoodDropdownLabel() {
@@ -869,7 +937,7 @@ function renderAuth() {
   renderActiveUser();
   if (!currentUser) return;
 
-  if (!canAccessView(currentView)) currentView = "operations";
+  if (!canAccessView(currentView)) currentView = defaultViewForUser();
 
   viewButtons.forEach((button) => { button.hidden = !canAccessView(button.dataset.viewButton); });
   renderUsersList();
@@ -881,7 +949,7 @@ async function switchView(view) {
   const previousView = currentView;
   currentView = view;
   bulkEditorOpen = false;
-  if (currentView === "mobile" || currentView === "refund") {
+  if (currentView === "mobile" || currentView === "refund" || currentView === "lider") {
     filterType.value = "";
     filterPc.value = "";
   }
@@ -927,7 +995,7 @@ async function login(username, password) {
   saveSession(data.user);
   await loadRemoteData({ includeAdminData: false });
   await migrateLocalRecordsIfNeeded(localRecords);
-  currentView = "operations";
+  currentView = defaultViewForUser(data.user);
   return true;
 }
 
@@ -991,6 +1059,16 @@ function renderTable() {
     renderStats();
     return;
   }
+  if (currentView === "lider") {
+    renderLiderAnexo();
+    renderStats();
+    return;
+  }
+  if (currentView === "liderStats") {
+    renderLiderStats();
+    renderStats();
+    return;
+  }
   recordsBody.innerHTML = "";
   const visibleRecords = filtered.slice(0, MAX_RENDERED_ROWS);
   const hasMoreRecords = filtered.length > MAX_RENDERED_ROWS;
@@ -1013,6 +1091,8 @@ function renderTable() {
 function renderViewChrome() {
   const exitPoll = currentView === "exitPoll";
   const survey = currentView === "survey";
+  const liderView = currentView === "lider";
+  const liderStatsView = currentView === "liderStats";
   const usersView = currentView === "users";
   const reportView = currentView === "report";
   const summaryView = currentView === "summary";
@@ -1021,21 +1101,26 @@ function renderViewChrome() {
     summary: "Resumen",
     mobile: "Moviles",
     refund: "Devolucion de Pasaje",
+    lider: "Anexo Lider",
+    liderStats: "Encuestas Lider",
     report: "Reporte",
   }[currentView] || "Sistema de Gestion");
-  toolsPanel.hidden = exitPoll || survey || usersView || reportView || summaryView;
-  tablePanel.hidden = exitPoll || survey || usersView || reportView || summaryView;
+  toolsPanel.hidden = exitPoll || survey || liderStatsView || usersView || reportView || summaryView;
+  search.placeholder = liderView ? "Buscar por nombre, apellido, cedula o barrio..." : "Nombres, apellidos, cedula, local, ciudad...";
+  tablePanel.hidden = exitPoll || survey || liderView || liderStatsView || usersView || reportView || summaryView;
   printMobilePdf.hidden = currentView !== "mobile";
   printRefundPdf.hidden = currentView !== "refund";
   printPaymentPdf.hidden = currentView !== "operations" || isWatcher();
   neighborhoodFilterDropdown.hidden = isWatcher();
   exitPollPanel.hidden = !exitPoll;
   surveyPanel.hidden = !survey;
+  liderPanel.hidden = !liderView;
+  liderStatsPanel.hidden = !liderStatsView;
   reportPanel.hidden = !reportView;
   summaryPanel.hidden = !summaryView;
   adminPanel.hidden = !usersView || !isAdmin();
-  tablePanel.classList.toggle("operations", !exitPoll && !survey);
-  bulkTools.hidden = exitPoll || survey || usersView || reportView || summaryView || isWatcher() || !bulkEditorOpen;
+  tablePanel.classList.toggle("operations", !exitPoll && !survey && !liderView && !liderStatsView);
+  bulkTools.hidden = exitPoll || survey || liderView || liderStatsView || usersView || reportView || summaryView || isWatcher() || !bulkEditorOpen;
   const selected = records.filter((record) => selectedRecords.has(record.id));
   editModeHint.textContent = selected.length === 1
     ? `Editando: ${fixNameText(selected[0].lastNames)} ${fixNameText(selected[0].firstNames)} - CI ${selected[0].documentNumber}`
@@ -1187,6 +1272,96 @@ function renderSurvey() {
     </tr>
   `).join("");
   surveyEmpty.hidden = surveyRecords.length > 0;
+}
+
+function getLiderRecords() {
+  return records
+    .filter((record) => statusValue(record.statusLider))
+    .sort((a, b) => statusValue(a.statusLider).localeCompare(statusValue(b.statusLider), "es") || fixNameText(a.lastNames).localeCompare(fixNameText(b.lastNames), "es"));
+}
+
+function renderLiderAnexo() {
+  const filtered = getFilteredRecords();
+  const visibleRecords = filtered.slice(0, MAX_RENDERED_ROWS);
+  const hasMoreRecords = filtered.length > MAX_RENDERED_ROWS;
+  liderBody.innerHTML = visibleRecords.map((record) => `
+    <tr>
+      <td>${escapeHtml(fixNameText(record.firstNames || record.fullName || ""))}</td>
+      <td>${escapeHtml(fixNameText(record.lastNames))}</td>
+      <td>${escapeHtml(record.documentNumber)}</td>
+      <td class="vote-place">
+        <strong>${escapeHtml(record.pollingPlace)}</strong>
+        <span>Mesa ${escapeHtml(record.tableNumber || "-")} · Orden ${escapeHtml(record.orderNumber || "-")}</span>
+      </td>
+      <td>${escapeHtml(record.neighborhood)}</td>
+      <td><span class="pill status-${statusValue(record.status)}">${statusLabel(record.status)}</span></td>
+      <td>
+        <select class="status-lider-select" data-lider-status-id="${escapeHtml(record.id)}">
+          <option value="">Sin marcar</option>
+          <option value="positivo" ${statusValue(record.statusLider) === "positivo" ? "selected" : ""}>POSITIVO</option>
+          <option value="negativo" ${statusValue(record.statusLider) === "negativo" ? "selected" : ""}>NEGATIVO</option>
+          <option value="dudoso" ${statusValue(record.statusLider) === "dudoso" ? "selected" : ""}>DUDOSO</option>
+        </select>
+      </td>
+      <td><span class="pill ${record.voted ? "pc-yes" : "pc-no"}">${record.voted ? "VOTO" : "NO VOTO"}</span></td>
+    </tr>
+  `).join("");
+  liderEmpty.textContent = hasMoreRecords
+    ? `Mostrando ${MAX_RENDERED_ROWS} de ${filtered.length} registros. Use la busqueda o filtros para acotar la lista.`
+    : "Todavia no hay registros para mostrar.";
+  liderEmpty.hidden = filtered.length > 0 && !hasMoreRecords;
+}
+
+function renderStatusCards(container, counts, totalLabel) {
+  container.innerHTML = `
+    ${exitPollCard(totalLabel, counts.total)}
+    ${exitPollCard("POSITIVO", `${counts.positivo} (${percentLabel(counts.positivo, counts.total)})`, "status-positivo")}
+    ${exitPollCard("DUDOSO", `${counts.dudoso} (${percentLabel(counts.dudoso, counts.total)})`, "status-dudoso")}
+    ${exitPollCard("NEGATIVO", `${counts.negativo} (${percentLabel(counts.negativo, counts.total)})`, "status-negativo")}
+  `;
+}
+
+function renderLiderStats() {
+  const mayorSurvey = getStatusSummary(records.filter((record) => statusValue(record.status))).general;
+  const mayorExitPoll = getStatusSummary(records.filter((record) => record.voted && statusValue(record.status))).general;
+  const liderSurveyRecords = getLiderRecords().map((record) => ({ ...record, status: record.statusLider }));
+  const liderSurvey = getStatusSummary(liderSurveyRecords).general;
+  const liderExitPoll = getStatusSummary(liderSurveyRecords.filter((record) => record.voted)).general;
+
+  renderStatusCards(liderMayorSurveyGeneral, mayorSurvey, "Total encuesta");
+  renderStatusChart(liderMayorSurveyChart, mayorSurvey, "Grafico de encuesta Intendente");
+  renderStatusCards(liderMayorExitPollGeneral, mayorExitPoll, "Total boca de urna");
+  renderStatusChart(liderMayorExitPollChart, mayorExitPoll, "Grafico de boca de urna Intendente");
+  renderStatusCards(liderGeneral, liderSurvey, "Total encuesta");
+  renderStatusChart(liderChart, liderSurvey, "Grafico de encuesta Lider");
+  renderStatusCards(liderExitPollGeneral, liderExitPoll, "Total boca de urna");
+  renderStatusChart(liderExitPollChart, liderExitPoll, "Grafico de boca de urna Lider");
+}
+
+async function setLiderStatus(recordId, statusLider) {
+  const previousRecords = records;
+  const select = Array.from(liderBody.querySelectorAll("[data-lider-status-id]")).find((item) => item.dataset.liderStatusId === recordId);
+  if (select) select.disabled = true;
+  records = records.map((record) => record.id === recordId ? { ...record, statusLider: statusValue(statusLider) } : record);
+  saveRecords();
+
+  try {
+    await apiRequest("/api/records/bulk", {
+      method: "POST",
+      body: JSON.stringify({ records: records.filter((record) => record.id === recordId) }),
+    });
+    await loadRemoteData();
+    renderTable();
+  } catch (error) {
+    records = previousRecords;
+    saveRecords();
+    renderTable();
+    alert(error.message.includes("status_lider")
+      ? "No se pudo guardar Estado Lider. Falta aplicar la migracion status_lider en Supabase."
+      : error.message);
+  } finally {
+    if (select) select.disabled = false;
+  }
 }
 
 function renderReport() {
@@ -1690,6 +1865,11 @@ neighborhoodSummaryList.addEventListener("click", (event) => {
   selectedNeighborhoodSummary = button.dataset.neighborhoodSummary;
   renderNeighborhoodSummary();
 });
+liderBody.addEventListener("change", (event) => {
+  const select = event.target.closest("[data-lider-status-id]");
+  if (!select) return;
+  setLiderStatus(select.dataset.liderStatusId, select.value);
+});
 printNeighborhoodPdf.addEventListener("click", generateNeighborhoodPdf);
 printMobilePdf.addEventListener("click", () => generateBenefitPdf("movil", "Moviles"));
 printRefundPdf.addEventListener("click", () => generateBenefitPdf("devolucion", "Devolucion de Pasaje"));
@@ -1712,11 +1892,10 @@ document.addEventListener("click", (event) => {
   neighborhoodDropdownButton.setAttribute("aria-expanded", "false");
 });
 [search, filterType, filterPc, filterVote].forEach((item) => item.addEventListener("input", renderTable));
-neighborhoodFilters.forEach((item) => {
-  item.addEventListener("change", () => {
-    updateNeighborhoodDropdownLabel();
-    renderTable();
-  });
+neighborhoodDropdown.addEventListener("change", (event) => {
+  if (!event.target.matches("[data-neighborhood-filter]")) return;
+  updateNeighborhoodDropdownLabel();
+  renderTable();
 });
 window.addEventListener("storage", (event) => {
   if (![STORAGE_KEY, USERS_KEY, AUDIT_KEY].includes(event.key)) return;
@@ -1724,6 +1903,6 @@ window.addEventListener("storage", (event) => {
 });
 setInterval(syncLiveData, LIVE_SYNC_MS);
 
-updateNeighborhoodDropdownLabel();
+renderNeighborhoodFilterOptions();
 updateWatcherFields();
 renderAuth();

@@ -24,6 +24,7 @@ create table if not exists records (
   order_number text not null default '',
   neighborhood text not null default '',
   status text not null default '',
+  status_lider text not null default '',
   benefit_type text not null default '',
   amount numeric not null default 0,
   city text not null default '',

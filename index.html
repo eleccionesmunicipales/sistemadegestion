@@ -40,6 +40,8 @@
         <button id="refundViewButton" type="button" class="nav-button" data-view-button="refund">Devolucion de Pasaje</button>
         <button id="surveyViewButton" type="button" class="nav-button" data-view-button="survey">Encuesta</button>
         <button id="exitPollViewButton" type="button" class="nav-button" data-view-button="exitPoll">Boca de urna</button>
+        <button id="liderViewButton" type="button" class="nav-button" data-view-button="lider">Anexo Lider</button>
+        <button id="liderStatsViewButton" type="button" class="nav-button" data-view-button="liderStats">Encuestas Lider</button>
         <button id="usersViewButton" type="button" class="nav-button" data-view-button="users">Usuarios</button>
         <button id="reportViewButton" type="button" class="nav-button" data-view-button="report">Reporte</button>
         <button id="logoutButton" type="button" class="nav-button logout-button">Salir</button>
@@ -69,6 +71,7 @@
               <option value="Veedor">Veedor</option>
               <option value="Moviles">Moviles</option>
               <option value="Devolucion de Pasaje">Devolucion de Pasaje</option>
+              <option value="Concejalia Lider">Concejalia Lider</option>
               <option value="Admin">Admin</option>
             </select>
           </label>
@@ -358,6 +361,58 @@
         <p id="surveyEmpty" class="empty">Todavia no hay registros con estado cargado.</p>
       </section>
 
+      <section id="liderPanel" class="panel exit-poll-panel" hidden>
+        <div class="section-title">
+          <h2>Anexo Lider</h2>
+        </div>
+        <p class="hint">Padron general para marcar el estado propio de Lider.</p>
+        <div class="table-wrap">
+          <table class="exit-poll-table">
+            <thead>
+              <tr>
+                <th>Nombres</th>
+                <th>Apellidos</th>
+                <th>Cedula</th>
+                <th>Votacion</th>
+                <th>Barrio/compania</th>
+                <th>Estado</th>
+                <th>Estado Lider</th>
+                <th>Voto</th>
+              </tr>
+            </thead>
+            <tbody id="liderBody"></tbody>
+          </table>
+        </div>
+        <p id="liderEmpty" class="empty">Todavia no hay registros para mostrar.</p>
+      </section>
+
+      <section id="liderStatsPanel" class="panel exit-poll-panel" hidden>
+        <div class="section-title">
+          <h2>Encuestas y boca de urna</h2>
+        </div>
+        <p class="hint">Comparativo de Intendente con Estado general y Lider con Estado Lider.</p>
+        <div class="section-title chart-title">
+          <h2>Encuesta Intendente</h2>
+        </div>
+        <div id="liderMayorSurveyGeneral" class="exit-poll-cards"></div>
+        <div id="liderMayorSurveyChart" class="exit-poll-chart-wrap"></div>
+        <div class="section-title chart-title">
+          <h2>Boca de urna Intendente</h2>
+        </div>
+        <div id="liderMayorExitPollGeneral" class="exit-poll-cards"></div>
+        <div id="liderMayorExitPollChart" class="exit-poll-chart-wrap"></div>
+        <div class="section-title chart-title">
+          <h2>Encuesta Lider</h2>
+        </div>
+        <div id="liderGeneral" class="exit-poll-cards"></div>
+        <div id="liderChart" class="exit-poll-chart-wrap"></div>
+        <div class="section-title chart-title">
+          <h2>Boca de urna Lider</h2>
+        </div>
+        <div id="liderExitPollGeneral" class="exit-poll-cards"></div>
+        <div id="liderExitPollChart" class="exit-poll-chart-wrap"></div>
+      </section>
+
       <section id="reportPanel" class="panel report-panel" hidden>
         <div class="section-title">
           <h2>Reporte del sistema</h2>
@@ -383,6 +438,6 @@
       </section>
     </main>
 
-    <script src="app.js?v=20260916-reporte-detalles"></script>
+    <script src="app.js?v=20260928-encuestas-lider"></script>
   </body>
 </html>

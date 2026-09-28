@@ -51,6 +51,7 @@ function toRecord(row) {
     orderNumber: row.order_number,
     neighborhood: row.neighborhood,
     status: row.status,
+    statusLider: row.status_lider || "",
     benefitType: row.benefit_type,
     amount: Number(row.amount || 0),
     city: row.city,
@@ -77,8 +78,33 @@ function toWatcherRecord(row) {
   };
 }
 
+function toLiderRecord(row) {
+  return {
+    id: row.id,
+    firstNames: row.first_names,
+    lastNames: row.last_names,
+    fullName: row.full_name,
+    birthDate: row.birth_date,
+    sex: row.sex,
+    documentNumber: row.document_number,
+    pollingPlace: row.polling_place,
+    tableNumber: row.table_number,
+    orderNumber: row.order_number,
+    neighborhood: row.neighborhood,
+    status: row.status,
+    statusLider: row.status_lider || "",
+    voted: Boolean(row.voted),
+  };
+}
+
+function statusValue(status) {
+  const value = normalizeKey(status);
+  return ["positivo", "negativo", "dudoso"].includes(value) ? value : "";
+}
+
 function fromRecord(record, username = "", existingRecord = null) {
   const existingPcMarkedBy = existingRecord?.pc_marked_by || existingRecord?.pcMarkedBy || "";
+  const existingStatusLider = existingRecord?.status_lider || existingRecord?.statusLider || "";
   return {
     id: String(record.id),
     first_names: record.firstNames || "",
@@ -92,6 +118,7 @@ function fromRecord(record, username = "", existingRecord = null) {
     order_number: record.orderNumber || "",
     neighborhood: record.neighborhood || "",
     status: record.status || "",
+    status_lider: existingRecord ? existingStatusLider : statusValue(record.statusLider),
     benefit_type: record.benefitType || "",
     amount: Number(record.amount || 0),
     city: record.city || "",
@@ -202,6 +229,11 @@ function normalizeKey(value) {
 
 function isWatcher(user) {
   return normalizeKey(user.function_name).includes("veedor");
+}
+
+function isConcejaliaLider(user) {
+  const functionKey = normalizeKey(user.function_name);
+  return functionKey.includes("concejalia") && functionKey.includes("lider");
 }
 
 function parseWatcherAssignment(description) {
@@ -327,6 +359,13 @@ app.get("/api/records", requireAuth, async (req, res) => {
       return res.json(data.map(toWatcherRecord));
     }
 
+    if (isConcejaliaLider(req.user)) {
+      const data = await fetchAllRecords({
+        select: "id, first_names, last_names, full_name, birth_date, sex, document_number, polling_place, table_number, order_number, neighborhood, status, status_lider, voted",
+      });
+      return res.json(data.map(toLiderRecord));
+    }
+
     const data = await fetchAllRecords();
     res.json(data.map(toRecord));
   } catch (error) {
@@ -336,7 +375,26 @@ app.get("/api/records", requireAuth, async (req, res) => {
 
 app.put("/api/records/:id", requireAuth, async (req, res) => {
   if (isWatcher(req.user)) return res.status(403).json({ error: "Los veedores solo pueden marcar VOTO/NO VOTO" });
-  const { data: existing } = await supabase.from("records").select("id, passed_pc, pc_marked_by").eq("id", req.params.id).maybeSingle();
+  if (isConcejaliaLider(req.user)) {
+    const { data, error } = await supabase
+      .from("records")
+      .update({ status_lider: statusValue(req.body.statusLider), updated_by: req.user.username })
+      .eq("id", req.params.id)
+      .select("id, first_names, last_names, full_name, birth_date, sex, document_number, polling_place, table_number, order_number, neighborhood, status, status_lider, voted")
+      .maybeSingle();
+    if (error) {
+      const missingColumn = error.message?.includes("status_lider") || error.code === "42703";
+      return res.status(400).json({
+        error: missingColumn
+          ? "Falta aplicar la migracion status_lider en Supabase"
+          : error.message,
+      });
+    }
+    if (!data) return res.status(404).json({ error: "No se encontro el registro para marcar estado Lider" });
+    await writeAudit(req.user, "Marco estado Lider", `CI ${data.document_number}`);
+    return res.json(toLiderRecord(data));
+  }
+  const { data: existing } = await supabase.from("records").select("id, passed_pc, pc_marked_by, status_lider").eq("id", req.params.id).maybeSingle();
   const payload = fromRecord({ ...req.body, id: req.params.id }, req.user.username, existing);
   const { data, error } = await supabase.from("records").upsert(payload).select("*").single();
   if (error) return res.status(400).json({ error: error.message });
@@ -370,7 +428,28 @@ app.post("/api/records/bulk", requireAuth, async (req, res) => {
     return res.json({ ok: true, count: ids.length });
   }
 
-  const { data: existingRows, error: existingError } = await supabase.from("records").select("id, passed_pc, pc_marked_by").in("id", ids);
+  if (isConcejaliaLider(req.user)) {
+    for (const record of records) {
+      const { data: updatedRows, error } = await supabase
+        .from("records")
+        .update({ status_lider: statusValue(record.statusLider), updated_by: req.user.username })
+        .eq("id", String(record.id))
+        .select("id");
+      if (error) {
+        const missingColumn = error.message?.includes("status_lider") || error.code === "42703";
+        return res.status(400).json({
+          error: missingColumn
+            ? "Falta aplicar la migracion status_lider en Supabase"
+            : error.message,
+        });
+      }
+      if (!updatedRows?.length) return res.status(404).json({ error: "No se encontro el registro para marcar estado Lider" });
+    }
+    await writeAudit(req.user, "Marco estado Lider", `${ids.length} registro(s) actualizados`);
+    return res.json({ ok: true, count: ids.length });
+  }
+
+  const { data: existingRows, error: existingError } = await supabase.from("records").select("id, passed_pc, pc_marked_by, status_lider").in("id", ids);
   if (existingError) return res.status(400).json({ error: existingError.message });
   const existingById = new Map((existingRows || []).map((record) => [record.id, record]));
   const payload = records.map((record) => fromRecord(record, req.user.username, existingById.get(String(record.id))));
