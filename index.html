@@ -200,6 +200,15 @@
               <option value="no">NO VOTO</option>
             </select>
           </label>
+          <label data-view-only="lider">Filtrar Estado Lider
+            <select id="filterLiderStatus">
+              <option value="">Todos</option>
+              <option value="positivo">POSITIVO</option>
+              <option value="dudoso">DUDOSO</option>
+              <option value="negativo">NEGATIVO</option>
+              <option value="sin-marcar">Sin marcar</option>
+            </select>
+          </label>
           <div class="filter-dropdown">
             <button id="neighborhoodDropdownButton" class="filter-dropdown-button" type="button" aria-expanded="false">
               Barrio/compania: Todos
@@ -366,6 +375,7 @@
           <h2>Anexo Lider</h2>
         </div>
         <p class="hint">Padron general para marcar el estado propio de Lider.</p>
+        <div id="liderReport" class="exit-poll-cards"></div>
         <div class="table-wrap">
           <table class="exit-poll-table">
             <thead>
@@ -438,6 +448,6 @@
       </section>
     </main>
 
-    <script src="app.js?v=20260928-lider-todos"></script>
+    <script src="app.js?v=20260928-lider-reporte"></script>
   </body>
 </html>

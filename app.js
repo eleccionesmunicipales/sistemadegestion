@@ -71,6 +71,7 @@ const search = document.querySelector("#search");
 const filterType = document.querySelector("#filterType");
 const filterPc = document.querySelector("#filterPc");
 const filterVote = document.querySelector("#filterVote");
+const filterLiderStatus = document.querySelector("#filterLiderStatus");
 const neighborhoodDropdownButton = document.querySelector("#neighborhoodDropdownButton");
 const neighborhoodDropdown = document.querySelector("#neighborhoodDropdown");
 const neighborhoodFilterDropdown = document.querySelector(".filter-dropdown");
@@ -101,6 +102,7 @@ const liderExitPollGeneral = document.querySelector("#liderExitPollGeneral");
 const liderExitPollChart = document.querySelector("#liderExitPollChart");
 const liderBody = document.querySelector("#liderBody");
 const liderEmpty = document.querySelector("#liderEmpty");
+const liderReport = document.querySelector("#liderReport");
 const reportPanel = document.querySelector("#reportPanel");
 const auditLogBody = document.querySelector("#auditLogBody");
 const auditLogEmpty = document.querySelector("#auditLogEmpty");
@@ -606,13 +608,15 @@ function getFilteredRecords() {
     const matchesType = viewType ? record.benefitType === viewType : (!filterType.value || record.benefitType === filterType.value);
     const matchesPc = !filterPc.value || (filterPc.value === "si" ? record.passedPc : !record.passedPc);
     const matchesVote = !filterVote.value || (filterVote.value === "si" ? record.voted : !record.voted);
+    const liderStatus = statusValue(record.statusLider);
+    const matchesLiderStatus = currentView !== "lider" || !filterLiderStatus.value || (filterLiderStatus.value === "sin-marcar" ? !liderStatus : liderStatus === filterLiderStatus.value);
     const matchesNeighborhood = !selectedNeighborhoods.length || selectedNeighborhoods.includes(normalize(record.neighborhood).toUpperCase());
     const text = [record.firstNames, fixNameText(record.firstNames), record.lastNames, fixNameText(record.lastNames), record.fullName, fixNameText(record.fullName), record.birthDate, record.sex, record.documentNumber, record.pollingPlace, record.tableNumber, record.orderNumber, record.city, record.neighborhood, record.mobileType, record.status, record.statusLider, record.blockNumber, record.voted ? "voto" : "no voto"]
       .join(" ")
       .replace(/ñ/g, "n");
     const normalizedText = normalizeKey(text);
     const matchesSearch = terms.every((term) => normalizedText.includes(term));
-    return matchesType && matchesPc && matchesVote && matchesNeighborhood && matchesSearch;
+    return matchesType && matchesPc && matchesVote && matchesLiderStatus && matchesNeighborhood && matchesSearch;
   });
 }
 
@@ -953,6 +957,7 @@ async function switchView(view) {
     filterType.value = "";
     filterPc.value = "";
   }
+  if (currentView !== "lider") filterLiderStatus.value = "";
   if (currentView === "operations" && selectedSummary === "payment") {
     filterType.value = "pago";
     filterPc.value = "";
@@ -1283,6 +1288,7 @@ function getLiderRecords() {
 function renderLiderAnexo() {
   const filtered = getFilteredRecords();
   const visibleRecords = filtered;
+  renderLiderReport(filtered);
   liderBody.innerHTML = visibleRecords.map((record) => `
     <tr>
       <td>${escapeHtml(fixNameText(record.firstNames || record.fullName || ""))}</td>
@@ -1307,6 +1313,35 @@ function renderLiderAnexo() {
   `).join("");
   liderEmpty.textContent = "Todavia no hay registros para mostrar.";
   liderEmpty.hidden = filtered.length > 0;
+}
+
+function liderCounts(liderRecords) {
+  return liderRecords.reduce((counts, record) => {
+    const status = statusValue(record.statusLider);
+    counts.total += 1;
+    if (status) counts[status] += 1;
+    else counts.unmarked += 1;
+    if (record.voted) {
+      counts.voted += 1;
+      if (status) counts.votedByStatus[status] += 1;
+    }
+    return counts;
+  }, { total: 0, positivo: 0, dudoso: 0, negativo: 0, unmarked: 0, voted: 0, votedByStatus: { positivo: 0, dudoso: 0, negativo: 0 } });
+}
+
+function renderLiderReport(liderRecords) {
+  const counts = liderCounts(liderRecords);
+  liderReport.innerHTML = `
+    ${exitPollCard("Total filtrado", counts.total)}
+    ${exitPollCard("VOTO", counts.voted, "pc-yes")}
+    ${exitPollCard("POSITIVO", `${counts.positivo} (${percentLabel(counts.positivo, counts.total)})`, "status-positivo")}
+    ${exitPollCard("DUDOSO", `${counts.dudoso} (${percentLabel(counts.dudoso, counts.total)})`, "status-dudoso")}
+    ${exitPollCard("NEGATIVO", `${counts.negativo} (${percentLabel(counts.negativo, counts.total)})`, "status-negativo")}
+    ${exitPollCard("VOTO POSITIVO", counts.votedByStatus.positivo, "status-positivo")}
+    ${exitPollCard("VOTO DUDOSO", counts.votedByStatus.dudoso, "status-dudoso")}
+    ${exitPollCard("VOTO NEGATIVO", counts.votedByStatus.negativo, "status-negativo")}
+    ${exitPollCard("Sin marcar", counts.unmarked)}
+  `;
 }
 
 function renderStatusCards(container, counts, totalLabel) {
@@ -1888,7 +1923,7 @@ document.addEventListener("click", (event) => {
   neighborhoodDropdown.hidden = true;
   neighborhoodDropdownButton.setAttribute("aria-expanded", "false");
 });
-[search, filterType, filterPc, filterVote].forEach((item) => item.addEventListener("input", renderTable));
+[search, filterType, filterPc, filterVote, filterLiderStatus].forEach((item) => item.addEventListener("input", renderTable));
 neighborhoodDropdown.addEventListener("change", (event) => {
   if (!event.target.matches("[data-neighborhood-filter]")) return;
   updateNeighborhoodDropdownLabel();
