@@ -1283,7 +1283,6 @@ function getLiderRecords() {
 function renderLiderAnexo() {
   const filtered = getFilteredRecords();
   const visibleRecords = filtered;
-  const hasMoreRecords = false;
   liderBody.innerHTML = visibleRecords.map((record) => `
     <tr>
       <td>${escapeHtml(fixNameText(record.firstNames || record.fullName || ""))}</td>
@@ -1306,10 +1305,8 @@ function renderLiderAnexo() {
       <td><span class="pill ${record.voted ? "pc-yes" : "pc-no"}">${record.voted ? "VOTO" : "NO VOTO"}</span></td>
     </tr>
   `).join("");
-  liderEmpty.textContent = hasMoreRecords
-    ? `Mostrando ${MAX_RENDERED_ROWS} de ${filtered.length} registros. Use la busqueda o filtros para acotar la lista.`
-    : "Todavia no hay registros para mostrar.";
-  liderEmpty.hidden = filtered.length > 0 && !hasMoreRecords;
+  liderEmpty.textContent = "Todavia no hay registros para mostrar.";
+  liderEmpty.hidden = filtered.length > 0;
 }
 
 function renderStatusCards(container, counts, totalLabel) {
