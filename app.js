@@ -1282,8 +1282,8 @@ function getLiderRecords() {
 
 function renderLiderAnexo() {
   const filtered = getFilteredRecords();
-  const visibleRecords = filtered.slice(0, MAX_RENDERED_ROWS);
-  const hasMoreRecords = filtered.length > MAX_RENDERED_ROWS;
+  const visibleRecords = filtered;
+  const hasMoreRecords = false;
   liderBody.innerHTML = visibleRecords.map((record) => `
     <tr>
       <td>${escapeHtml(fixNameText(record.firstNames || record.fullName || ""))}</td>
