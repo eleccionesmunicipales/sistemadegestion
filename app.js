@@ -366,6 +366,15 @@ function isAdmin() {
   return currentUser?.role === "admin";
 }
 
+function pcLockedMessage(record) {
+  return `Esta cedula ya pasó por PC. Zona: ${record.neighborhood || "Sin dato"}. Usuario: ${record.pcMarkedBy || "Sin dato"}`;
+}
+
+function lockedSelectedPcRecord() {
+  if (isAdmin()) return null;
+  return records.find((record) => selectedRecords.has(record.id) && record.passedPc) || null;
+}
+
 function isWatcher(user = currentUser) {
   return normalizeKey(user?.functionName).includes("veedor");
 }
@@ -1631,6 +1640,10 @@ recordsBody.addEventListener("click", (event) => {
 
   if (button.dataset.action === "edit") {
     if (isWatcher()) return;
+    if (!isAdmin() && record.passedPc) {
+      alert(pcLockedMessage(record));
+      return;
+    }
     selectedRecords.clear();
     selectedRecords.add(record.id);
     bulkEditorOpen = true;
@@ -1682,6 +1695,11 @@ async function applyBulkChanges() {
     alert("Seleccione al menos un registro.");
     return;
   }
+  const lockedRecord = lockedSelectedPcRecord();
+  if (lockedRecord) {
+    alert(pcLockedMessage(lockedRecord));
+    return;
+  }
 
   const hasAmount = normalize(bulkFields.amount.value) !== "";
   const hasCity = normalize(bulkFields.city.value) !== "";
@@ -1726,6 +1744,11 @@ async function clearSelectedFields() {
   const ids = Array.from(selectedRecords);
   if (!ids.length) {
     alert("Seleccione al menos un registro.");
+    return;
+  }
+  const lockedRecord = lockedSelectedPcRecord();
+  if (lockedRecord) {
+    alert(pcLockedMessage(lockedRecord));
     return;
   }
 

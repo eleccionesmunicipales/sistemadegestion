@@ -236,6 +236,31 @@ function isConcejaliaLider(user) {
   return functionKey.includes("concejalia") && functionKey.includes("lider");
 }
 
+function pcLockedMessage(record) {
+  return `Esta cedula ya pasó por PC. Zona: ${record.neighborhood || "Sin dato"}. Usuario: ${record.pc_marked_by || "Sin dato"}`;
+}
+
+async function findPcLockedRecord(ids) {
+  const cleanIds = ids.map((id) => String(id)).filter(Boolean);
+  if (!cleanIds.length) return null;
+  const { data, error } = await supabase
+    .from("records")
+    .select("id, passed_pc, pc_marked_by, neighborhood")
+    .in("id", cleanIds)
+    .eq("passed_pc", true)
+    .limit(1);
+  if (error) throw error;
+  return data?.[0] || null;
+}
+
+async function preventPcLockedEdit(req, res, ids) {
+  if (req.user.role === "admin") return false;
+  const lockedRecord = await findPcLockedRecord(ids);
+  if (!lockedRecord) return false;
+  res.status(403).json({ error: pcLockedMessage(lockedRecord) });
+  return true;
+}
+
 function parseWatcherAssignment(description) {
   const text = String(description || "").trim();
   const labeledMatch = text.match(/local\s*:\s*(.*?)\s*\|\s*mesa\s*:\s*(.+)$/i);
@@ -375,6 +400,11 @@ app.get("/api/records", requireAuth, async (req, res) => {
 
 app.put("/api/records/:id", requireAuth, async (req, res) => {
   if (isWatcher(req.user)) return res.status(403).json({ error: "Los veedores solo pueden marcar VOTO/NO VOTO" });
+  try {
+    if (await preventPcLockedEdit(req, res, [req.params.id])) return;
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
   if (isConcejaliaLider(req.user)) {
     const { data, error } = await supabase
       .from("records")
@@ -426,6 +456,12 @@ app.post("/api/records/bulk", requireAuth, async (req, res) => {
     }
     await writeAudit(req.user, "Marco voto", `${ids.length} registro(s) actualizados por veedor`);
     return res.json({ ok: true, count: ids.length });
+  }
+
+  try {
+    if (await preventPcLockedEdit(req, res, ids)) return;
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
   }
 
   if (isConcejaliaLider(req.user)) {
