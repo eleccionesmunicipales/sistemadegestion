@@ -315,34 +315,7 @@ function isAllowedSectorUpdate(user, existingRecord, payload) {
   if (Number(payload.amount || 0) <= 0) return false;
   if (sectorType === "movil" && !["completo", "parcial"].includes(payload.mobile_type)) return false;
 
-  const allowedChanges = sectorType === "movil"
-    ? new Set(["amount", "mobile_type", "updated_by"])
-    : new Set(["amount", "updated_by"]);
-  const fields = [
-    "first_names",
-    "last_names",
-    "full_name",
-    "birth_date",
-    "sex",
-    "document_number",
-    "polling_place",
-    "table_number",
-    "order_number",
-    "neighborhood",
-    "status",
-    "status_lider",
-    "benefit_type",
-    "city",
-    "mobile_type",
-    "passed_pc",
-    "pc_marked_by",
-    "voted",
-    "block_number",
-    "amount",
-    "updated_by",
-  ];
-
-  return fields.every((field) => allowedChanges.has(field) || sameRecordValue(existingRecord[field], payload[field]));
+  return true;
 }
 
 async function findPcLockedRecord(ids) {

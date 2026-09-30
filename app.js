@@ -462,16 +462,15 @@ function updateBulkEditorForSelection() {
   const sectorEditMode = Boolean(loadedRecord && sectorType && loadedRecord.benefitType === sectorType);
   const pcOnlyMode = Boolean(loadedRecord && !loadedRecord.passedPc);
   Object.entries(bulkFields).forEach(([field, control]) => {
-    const allowedSectorField = field === "amount" || (sectorType === "movil" && field === "mobileType");
-    control.closest("label").hidden = sectorEditMode ? !allowedSectorField : pcOnlyMode && field !== "passedPc";
+    control.closest("label").hidden = sectorEditMode ? field === "benefitType" : pcOnlyMode && field !== "passedPc";
   });
   document.querySelector("#clearBulkFields").hidden = pcOnlyMode || sectorEditMode;
   const noPcOption = bulkFields.passedPc.querySelector('option[value="no"]');
   if (noPcOption) noPcOption.hidden = pcOnlyMode;
   if (sectorEditMode) {
     editModeHint.textContent = sectorType === "movil"
-      ? "Edicion de Moviles: cargue monto y seleccione movil completo o parcial."
-      : "Edicion de Devolucion de Pasaje: cargue monto para guardar.";
+      ? "Edicion de Moviles: puede editar el registro completo. Debe quedar con monto y movil completo o parcial."
+      : "Edicion de Devolucion de Pasaje: puede editar el registro completo. Debe quedar con monto.";
     return false;
   }
   if (!pcOnlyMode) return false;
