@@ -376,7 +376,7 @@ function lockedSelectedPcRecord() {
 }
 
 function loadedRecordMessage(record) {
-  return `Esta cedula ya fue cargada. Zona: ${record.neighborhood || "Sin dato"}. Usuario: ${record.updatedBy || "Sin dato"}`;
+  return `Esta cedula ya fue cargada previamente. Zona: ${record.neighborhood || "Sin dato"}. Usuario: ${record.updatedBy || "Sin dato"}`;
 }
 
 function hasOperationalLoad(record) {
@@ -406,6 +406,20 @@ function hasBulkNonPcChanges() {
     || bulkFields.mobileType.value
     || normalize(bulkFields.blockNumber.value) !== ""
   );
+}
+
+function updateBulkEditorForSelection() {
+  const loadedRecord = lockedSelectedLoadedRecord();
+  const pcOnlyMode = Boolean(loadedRecord && !loadedRecord.passedPc);
+  Object.entries(bulkFields).forEach(([field, control]) => {
+    control.closest("label").hidden = pcOnlyMode && field !== "passedPc";
+  });
+  document.querySelector("#clearBulkFields").hidden = pcOnlyMode;
+  const noPcOption = bulkFields.passedPc.querySelector('option[value="no"]');
+  if (noPcOption) noPcOption.hidden = pcOnlyMode;
+  if (!pcOnlyMode) return false;
+  editModeHint.textContent = `${loadedRecordMessage(loadedRecord)} Puedes visualizarlos, pero no editarlos.`;
+  return true;
 }
 
 function isWatcher(user = currentUser) {
@@ -1172,6 +1186,7 @@ function renderViewChrome() {
   editModeHint.textContent = selected.length === 1
     ? `Editando: ${fixNameText(selected[0].lastNames)} ${fixNameText(selected[0].firstNames)} - CI ${selected[0].documentNumber}`
     : `Editando ${selected.length} registros seleccionados`;
+  updateBulkEditorForSelection();
   viewSections.forEach((section) => {
     section.hidden = section.dataset.view !== currentView;
   });

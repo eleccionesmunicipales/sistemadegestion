@@ -242,7 +242,7 @@ function pcLockedMessage(record) {
 }
 
 function loadedRecordMessage(record) {
-  return `Esta cedula ya fue cargada. Zona: ${record.neighborhood || "Sin dato"}. Usuario: ${record.updated_by || "Sin dato"}`;
+  return `Esta cedula ya fue cargada previamente. Zona: ${record.neighborhood || "Sin dato"}. Usuario: ${record.updated_by || "Sin dato"}`;
 }
 
 function hasOperationalLoad(record) {
