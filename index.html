@@ -448,6 +448,19 @@
       </section>
     </main>
 
-    <script src="app.js?v=20260928-lider-reporte"></script>
+    <div id="systemModal" class="system-modal" hidden>
+      <div class="system-modal-backdrop" data-modal-close></div>
+      <section class="system-modal-card" role="dialog" aria-modal="true" aria-labelledby="systemModalTitle" aria-describedby="systemModalMessage">
+        <div class="system-modal-mark" aria-hidden="true">!</div>
+        <h2 id="systemModalTitle">Aviso del sistema</h2>
+        <p id="systemModalMessage"></p>
+        <div id="systemModalActions" class="system-modal-actions">
+          <button id="systemModalCancel" type="button" class="ghost">Cancelar</button>
+          <button id="systemModalOk" type="button" class="primary">Aceptar</button>
+        </div>
+      </section>
+    </div>
+
+    <script src="app.js?v=20260929-modal-avisos"></script>
   </body>
 </html>

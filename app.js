@@ -121,6 +121,11 @@ const bulkFields = {
   passedPc: document.querySelector("#bulkPassedPc"),
   blockNumber: document.querySelector("#bulkBlockNumber"),
 };
+const systemModal = document.querySelector("#systemModal");
+const systemModalTitle = document.querySelector("#systemModalTitle");
+const systemModalMessage = document.querySelector("#systemModalMessage");
+const systemModalOk = document.querySelector("#systemModalOk");
+const systemModalCancel = document.querySelector("#systemModalCancel");
 
 let records = repairLoadedRecords(loadRecords());
 let users = loadUsers();
@@ -138,6 +143,39 @@ let lastRemoteRecordsVersion = "";
 let lastRecordsJson = localStorage.getItem(STORAGE_KEY) || "";
 let lastUsersJson = localStorage.getItem(USERS_KEY) || "";
 let lastAuditJson = localStorage.getItem(AUDIT_KEY) || "";
+let systemModalResolve = null;
+let systemModalConfirmMode = false;
+let systemModalPreviousFocus = null;
+
+function closeSystemModal(result) {
+  systemModal.hidden = true;
+  if (systemModalPreviousFocus?.focus) systemModalPreviousFocus.focus();
+  if (systemModalResolve) systemModalResolve(result);
+  systemModalResolve = null;
+}
+
+function openSystemModal({ title = "Aviso del sistema", message, confirmMode = false }) {
+  systemModalConfirmMode = confirmMode;
+  systemModalPreviousFocus = document.activeElement;
+  systemModalTitle.textContent = title;
+  systemModalMessage.textContent = message;
+  systemModalCancel.hidden = !confirmMode;
+  systemModalOk.textContent = confirmMode ? "Aceptar" : "Entendido";
+  systemModal.hidden = false;
+  systemModalOk.focus();
+
+  return new Promise((resolve) => {
+    systemModalResolve = resolve;
+  });
+}
+
+function showSystemAlert(message, title = "Aviso del sistema") {
+  return openSystemModal({ title, message: String(message || ""), confirmMode: false });
+}
+
+function showSystemConfirm(message, title = "Confirmar accion") {
+  return openSystemModal({ title, message: String(message || ""), confirmMode: true });
+}
 
 function loadUsers() {
   try {
@@ -239,7 +277,7 @@ function applyPendingVoteUpdates() {
 
 async function migrateLocalRecordsIfNeeded(localRecords) {
   if (!isAdmin() || records.length || !localRecords.length) return;
-  const shouldMigrate = confirm(`La base de datos esta vacia y hay ${localRecords.length} registros guardados en este navegador. Desea subirlos a Supabase ahora?`);
+  const shouldMigrate = await showSystemConfirm(`La base de datos esta vacia y hay ${localRecords.length} registros guardados en este navegador. Desea subirlos a Supabase ahora?`);
   if (!shouldMigrate) return;
   await apiRequest("/api/records/bulk", {
     method: "POST",
@@ -552,7 +590,7 @@ function repairStoredNames() {
 
   saveRecords();
   renderTable();
-  alert(changedCount ? `Se corrigieron ${changedCount} registros.` : "No se encontraron nombres para corregir.");
+  showSystemAlert(changedCount ? `Se corrigieron ${changedCount} registros.` : "No se encontraron nombres para corregir.");
 }
 
 function money(value) {
@@ -861,7 +899,7 @@ function renderNeighborhoodDetail() {
 function generateNeighborhoodPdf() {
   const detailRecords = getSelectedNeighborhoodRecords();
   if (!selectedNeighborhoodSummary) {
-    alert("Seleccione un barrio/compañia primero.");
+    showSystemAlert("Seleccione un barrio/compañia primero.");
     return;
   }
 
@@ -882,7 +920,7 @@ function generateNeighborhoodPdf() {
   `).join("");
   const printWindow = window.open("", "_blank");
   if (!printWindow) {
-    alert("El navegador bloqueo la ventana del reporte. Permita ventanas emergentes para generar el PDF.");
+    showSystemAlert("El navegador bloqueo la ventana del reporte. Permita ventanas emergentes para generar el PDF.");
     return;
   }
 
@@ -951,7 +989,7 @@ function generateBenefitPdf(type, title) {
   `).join("");
   const printWindow = window.open("", "_blank");
   if (!printWindow) {
-    alert("El navegador bloqueo la ventana del reporte. Permita ventanas emergentes para generar el PDF.");
+    showSystemAlert("El navegador bloqueo la ventana del reporte. Permita ventanas emergentes para generar el PDF.");
     return;
   }
 
@@ -1455,7 +1493,7 @@ async function setLiderStatus(recordId, statusLider) {
     records = previousRecords;
     saveRecords();
     renderTable();
-    alert(error.message.includes("status_lider")
+    showSystemAlert(error.message.includes("status_lider")
       ? "No se pudo guardar Estado Lider. Falta aplicar la migracion status_lider en Supabase."
       : error.message);
   } finally {
@@ -1496,7 +1534,7 @@ function generatePcReportPdf() {
   `).join("");
   const printWindow = window.open("", "_blank");
   if (!printWindow) {
-    alert("El navegador bloqueo la ventana del reporte. Permita ventanas emergentes para generar el PDF.");
+    showSystemAlert("El navegador bloqueo la ventana del reporte. Permita ventanas emergentes para generar el PDF.");
     return;
   }
 
@@ -1699,7 +1737,7 @@ recordsBody.addEventListener("click", (event) => {
   if (button.dataset.action === "edit") {
     if (isWatcher()) return;
     if (!isAdmin() && record.passedPc) {
-      alert(pcLockedMessage(record));
+      showSystemAlert(pcLockedMessage(record));
       return;
     }
     selectedRecords.clear();
@@ -1724,7 +1762,7 @@ function resetBulkFields() {
 
 async function toggleVoted(record) {
   if (!isAdmin() && !isWatcher() && hasOperationalLoad(record)) {
-    alert(loadedRecordMessage(record));
+    showSystemAlert(loadedRecordMessage(record));
     return;
   }
   const previousRecords = records;
@@ -1747,24 +1785,24 @@ async function toggleVoted(record) {
     records = previousRecords;
     saveRecords();
     renderTable();
-    alert(error.message);
+    showSystemAlert(error.message);
   }
 }
 
 async function applyBulkChanges() {
   const ids = Array.from(selectedRecords);
   if (!ids.length) {
-    alert("Seleccione al menos un registro.");
+    showSystemAlert("Seleccione al menos un registro.");
     return;
   }
   const lockedRecord = lockedSelectedPcRecord();
   if (lockedRecord) {
-    alert(pcLockedMessage(lockedRecord));
+    showSystemAlert(pcLockedMessage(lockedRecord));
     return;
   }
   const loadedRecord = lockedSelectedLoadedRecord();
   if (loadedRecord && (bulkFields.passedPc.value !== "si" || hasBulkNonPcChanges())) {
-    alert(loadedRecordMessage(loadedRecord));
+    showSystemAlert(loadedRecordMessage(loadedRecord));
     return;
   }
 
@@ -1798,29 +1836,29 @@ async function applyBulkChanges() {
       body: JSON.stringify({ records: records.filter((record) => ids.includes(record.id)) }),
     });
   } catch (error) {
-    alert(error.message);
+    showSystemAlert(error.message);
     return;
   }
   resetBulkFields();
   bulkEditorOpen = false;
   renderTable();
-  alert(`Se actualizaron ${ids.length} registros.`);
+  showSystemAlert(`Se actualizaron ${ids.length} registros.`);
 }
 
 async function clearSelectedFields() {
   const ids = Array.from(selectedRecords);
   if (!ids.length) {
-    alert("Seleccione al menos un registro.");
+    showSystemAlert("Seleccione al menos un registro.");
     return;
   }
   const lockedRecord = lockedSelectedPcRecord();
   if (lockedRecord) {
-    alert(pcLockedMessage(lockedRecord));
+    showSystemAlert(pcLockedMessage(lockedRecord));
     return;
   }
   const loadedRecord = lockedSelectedLoadedRecord();
   if (loadedRecord) {
-    alert(loadedRecordMessage(loadedRecord));
+    showSystemAlert(loadedRecordMessage(loadedRecord));
     return;
   }
 
@@ -1847,14 +1885,14 @@ async function clearSelectedFields() {
       body: JSON.stringify({ records: records.filter((record) => ids.includes(record.id)) }),
     });
   } catch (error) {
-    alert(error.message);
+    showSystemAlert(error.message);
     return;
   }
   resetBulkFields();
   bulkEditorOpen = false;
   selectedRecords.clear();
   renderTable();
-  alert(`Se dejaron en blanco ${ids.length} registros.`);
+  showSystemAlert(`Se dejaron en blanco ${ids.length} registros.`);
 }
 
 function toCsvValue(value) {
@@ -1936,6 +1974,15 @@ function updateWatcherFields() {
     renderWatcherPollingPlaceOptions();
   }
 }
+systemModalOk.addEventListener("click", () => closeSystemModal(true));
+systemModalCancel.addEventListener("click", () => closeSystemModal(false));
+systemModal.addEventListener("click", (event) => {
+  if (event.target.closest("[data-modal-close]")) closeSystemModal(false);
+});
+document.addEventListener("keydown", (event) => {
+  if (systemModal.hidden || event.key !== "Escape") return;
+  closeSystemModal(systemModalConfirmMode ? false : true);
+});
 usersList.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-delete-user]");
   if (!button) return;
@@ -1943,7 +1990,7 @@ usersList.addEventListener("click", async (event) => {
     await apiRequest(`/api/users/${encodeURIComponent(button.dataset.deleteUser)}`, { method: "DELETE" });
     users = users.filter((user) => user.username !== button.dataset.deleteUser);
   } catch (error) {
-    alert(error.message);
+    showSystemAlert(error.message);
   }
   renderUsersList();
 });
