@@ -366,12 +366,18 @@ function isAdmin() {
   return currentUser?.role === "admin";
 }
 
-function pcLockedMessage(record) {
-  return `Esta cedula ya pasó por PC. Zona: ${record.neighborhood || "Sin dato"}. Usuario: ${record.pcMarkedBy || "Sin dato"}`;
-}
-
 function publicUpdatedBy(username) {
   return normalizeKey(username) === "liderconcejal" ? "" : username || "";
+}
+
+function pcSectorLabel(record) {
+  if (record.benefitType === "devolucion") return " Devolucion de Pasaje.";
+  if (record.benefitType === "movil") return " Movil.";
+  return "";
+}
+
+function pcLockedMessage(record) {
+  return `Esta cedula ya pasó por PC. Barrio/compañia: ${record.neighborhood || "Sin dato"}.${pcSectorLabel(record)} Usuario: ${record.pcMarkedBy || "Sin dato"}`;
 }
 
 function lockedSelectedPcRecord() {

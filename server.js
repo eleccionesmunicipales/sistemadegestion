@@ -237,14 +237,20 @@ function isConcejaliaLider(user) {
   return functionKey.includes("concejalia") && functionKey.includes("lider");
 }
 
-function pcLockedMessage(record) {
-  return `Esta cedula ya pasó por PC. Zona: ${record.neighborhood || "Sin dato"}. Usuario: ${record.pc_marked_by || "Sin dato"}`;
-}
-
 function publicUpdatedBy(username) {
   const userKey = normalizeKey(username);
   if (userKey === "liderconcejal") return "";
   return username || "";
+}
+
+function pcSectorLabel(record) {
+  if (record.benefit_type === "devolucion") return " Devolucion de Pasaje.";
+  if (record.benefit_type === "movil") return " Movil.";
+  return "";
+}
+
+function pcLockedMessage(record) {
+  return `Esta cedula ya pasó por PC. Barrio/compañia: ${record.neighborhood || "Sin dato"}.${pcSectorLabel(record)} Usuario: ${record.pc_marked_by || "Sin dato"}`;
 }
 
 function loadedRecordMessage(record) {
