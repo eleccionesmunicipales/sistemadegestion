@@ -1421,7 +1421,7 @@ function renderLiderAnexo() {
 
 function generateLiderVotesPdf() {
   const reportRecords = getLiderRecords()
-    .filter((record) => record.voted && ["positivo", "dudoso"].includes(statusValue(record.statusLider)));
+    .filter((record) => ["positivo", "dudoso"].includes(statusValue(record.statusLider)));
   const positiveCount = reportRecords.filter((record) => statusValue(record.statusLider) === "positivo").length;
   const doubtfulCount = reportRecords.filter((record) => statusValue(record.statusLider) === "dudoso").length;
   const generatedAt = new Date().toLocaleString("es-PY");
@@ -1461,7 +1461,7 @@ function generateLiderVotesPdf() {
         </style>
       </head>
       <body>
-        <h1>Reporte votos Lider POSITIVOS y DUDOSOS</h1>
+        <h1>Reporte Lider POSITIVOS y DUDOSOS</h1>
         <p>Generado: ${escapeHtml(generatedAt)} | Total: ${reportRecords.length}</p>
         <div class="summary">
           <span>POSITIVOS: ${positiveCount}</span>
@@ -1480,14 +1480,14 @@ function generateLiderVotesPdf() {
               <th>Barrio/compania</th>
             </tr>
           </thead>
-          <tbody>${rows || `<tr><td colspan="8">No hay votos POSITIVOS o DUDOSOS para Lider.</td></tr>`}</tbody>
+          <tbody>${rows || `<tr><td colspan="8">No hay registros POSITIVOS o DUDOSOS para Lider.</td></tr>`}</tbody>
         </table>
       </body>
     </html>
   `);
   printWindow.document.close();
   printWindow.focus();
-  registerAction("Genero reporte PDF", `Votos Lider positivos/dudosos: ${reportRecords.length}`);
+  registerAction("Genero reporte PDF", `Lider positivos/dudosos: ${reportRecords.length}`);
   printWindow.print();
 }
 
