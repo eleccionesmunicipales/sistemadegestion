@@ -156,13 +156,14 @@ function closeSystemModal(result) {
   systemModalResolve = null;
 }
 
-function openSystemModal({ title = "Aviso del sistema", message, confirmMode = false }) {
+function openSystemModal({ title = "Aviso del sistema", message, confirmMode = false, okText = "", cancelText = "Cancelar" }) {
   systemModalConfirmMode = confirmMode;
   systemModalPreviousFocus = document.activeElement;
   systemModalTitle.textContent = title;
   systemModalMessage.textContent = message;
   systemModalCancel.hidden = !confirmMode;
-  systemModalOk.textContent = confirmMode ? "Aceptar" : "Entendido";
+  systemModalCancel.textContent = cancelText;
+  systemModalOk.textContent = okText || (confirmMode ? "Aceptar" : "Entendido");
   systemModal.hidden = false;
   systemModalOk.focus();
 
@@ -175,8 +176,8 @@ function showSystemAlert(message, title = "Aviso del sistema") {
   return openSystemModal({ title, message: String(message || ""), confirmMode: false });
 }
 
-function showSystemConfirm(message, title = "Confirmar accion") {
-  return openSystemModal({ title, message: String(message || ""), confirmMode: true });
+function showSystemConfirm(message, title = "Confirmar accion", options = {}) {
+  return openSystemModal({ title, message: String(message || ""), confirmMode: true, ...options });
 }
 
 function loadUsers() {
@@ -283,6 +284,30 @@ async function loadAdminViewData() {
   return false;
 }
 
+function openAdminRequestRecord(request) {
+  const documentMatch = String(request.detail || "").match(/CI\s+([^\s|-]+)/i);
+  const documentNumber = normalize(documentMatch?.[1] || "");
+  const record = records.find((item) => normalize(item.documentNumber) === documentNumber);
+  if (!record) {
+    showSystemAlert("No se encontro el registro solicitado en el padron cargado.");
+    return;
+  }
+
+  currentView = "operations";
+  selectedSummary = "";
+  filterType.value = "";
+  filterPc.value = "";
+  filterVote.value = "";
+  search.value = record.documentNumber;
+  selectedRecords.clear();
+  selectedRecords.add(record.id);
+  bulkEditorOpen = true;
+  resetBulkFields();
+  renderTable();
+  bulkTools.scrollIntoView({ behavior: "smooth", block: "center" });
+  setTimeout(() => bulkFields.benefitType.focus(), 100);
+}
+
 async function checkAdminAlerts() {
   if (!isAdmin() || !authToken) return false;
   const remoteAuditLog = await apiRequest("/api/audit");
@@ -295,7 +320,11 @@ async function checkAdminAlerts() {
   if (!request) return false;
   seenAlerts.add(String(request.id));
   saveSeenAdminAlerts(seenAlerts);
-  showSystemAlert(`${request.action}\n\n${request.detail}\n\nSolicitado por: ${request.user}`, "Solicitud para admin");
+  const accepted = await showSystemConfirm(`${request.action}\n\n${request.detail}\n\nSolicitado por: ${request.user}`, "Solicitud para admin", {
+    okText: "Aceptar",
+    cancelText: "Rechazar",
+  });
+  if (accepted) openAdminRequestRecord(request);
   return true;
 }
 
