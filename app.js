@@ -102,7 +102,7 @@ const liderExitPollGeneral = document.querySelector("#liderExitPollGeneral");
 const liderExitPollChart = document.querySelector("#liderExitPollChart");
 const liderBody = document.querySelector("#liderBody");
 const liderEmpty = document.querySelector("#liderEmpty");
-const liderReport = document.querySelector("#liderReport");
+const printLiderVotesPdf = document.querySelector("#printLiderVotesPdf");
 const reportPanel = document.querySelector("#reportPanel");
 const auditLogBody = document.querySelector("#auditLogBody");
 const auditLogEmpty = document.querySelector("#auditLogEmpty");
@@ -1393,7 +1393,6 @@ function getLiderRecords() {
 function renderLiderAnexo() {
   const filtered = getFilteredRecords();
   const visibleRecords = filtered;
-  renderLiderReport(filtered);
   liderBody.innerHTML = visibleRecords.map((record) => `
     <tr>
       <td>${escapeHtml(fixNameText(record.firstNames || record.fullName || ""))}</td>
@@ -1420,33 +1419,76 @@ function renderLiderAnexo() {
   liderEmpty.hidden = filtered.length > 0;
 }
 
-function liderCounts(liderRecords) {
-  return liderRecords.reduce((counts, record) => {
-    const status = statusValue(record.statusLider);
-    counts.total += 1;
-    if (status) counts[status] += 1;
-    else counts.unmarked += 1;
-    if (record.voted) {
-      counts.voted += 1;
-      if (status) counts.votedByStatus[status] += 1;
-    }
-    return counts;
-  }, { total: 0, positivo: 0, dudoso: 0, negativo: 0, unmarked: 0, voted: 0, votedByStatus: { positivo: 0, dudoso: 0, negativo: 0 } });
-}
+function generateLiderVotesPdf() {
+  const reportRecords = getLiderRecords()
+    .filter((record) => record.voted && ["positivo", "dudoso"].includes(statusValue(record.statusLider)));
+  const positiveCount = reportRecords.filter((record) => statusValue(record.statusLider) === "positivo").length;
+  const doubtfulCount = reportRecords.filter((record) => statusValue(record.statusLider) === "dudoso").length;
+  const generatedAt = new Date().toLocaleString("es-PY");
+  const rows = reportRecords.map((record) => `
+    <tr>
+      <td>${escapeHtml(statusLabel(record.statusLider))}</td>
+      <td>${escapeHtml(fixNameText(record.lastNames))}</td>
+      <td>${escapeHtml(fixNameText(record.firstNames || record.fullName || ""))}</td>
+      <td>${escapeHtml(record.documentNumber)}</td>
+      <td>${escapeHtml(record.pollingPlace)}</td>
+      <td>${escapeHtml(record.tableNumber)}</td>
+      <td>${escapeHtml(record.orderNumber)}</td>
+      <td>${escapeHtml(record.neighborhood)}</td>
+    </tr>
+  `).join("");
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    showSystemAlert("El navegador bloqueo la ventana del reporte. Permita ventanas emergentes para generar el PDF.");
+    return;
+  }
 
-function renderLiderReport(liderRecords) {
-  const counts = liderCounts(liderRecords);
-  liderReport.innerHTML = `
-    ${exitPollCard("Total filtrado", counts.total)}
-    ${exitPollCard("VOTO", counts.voted, "pc-yes")}
-    ${exitPollCard("POSITIVO", `${counts.positivo} (${percentLabel(counts.positivo, counts.total)})`, "status-positivo")}
-    ${exitPollCard("DUDOSO", `${counts.dudoso} (${percentLabel(counts.dudoso, counts.total)})`, "status-dudoso")}
-    ${exitPollCard("NEGATIVO", `${counts.negativo} (${percentLabel(counts.negativo, counts.total)})`, "status-negativo")}
-    ${exitPollCard("VOTO POSITIVO", counts.votedByStatus.positivo, "status-positivo")}
-    ${exitPollCard("VOTO DUDOSO", counts.votedByStatus.dudoso, "status-dudoso")}
-    ${exitPollCard("VOTO NEGATIVO", counts.votedByStatus.negativo, "status-negativo")}
-    ${exitPollCard("Sin marcar", counts.unmarked)}
-  `;
+  printWindow.document.write(`
+    <!doctype html>
+    <html lang="es">
+      <head>
+        <meta charset="utf-8">
+        <title>Reporte votos Lider</title>
+        <style>
+          body { font-family: Arial, sans-serif; color: #111; margin: 24px; }
+          h1 { margin: 0 0 6px; font-size: 22px; }
+          p { margin: 0 0 14px; color: #555; }
+          .summary { display: flex; gap: 10px; margin: 0 0 16px; }
+          .summary span { border: 1px solid #ddd; border-radius: 10px; padding: 8px 10px; font-weight: 700; }
+          table { width: 100%; border-collapse: collapse; font-size: 11px; }
+          th, td { border: 1px solid #ddd; padding: 6px; text-align: left; vertical-align: top; }
+          th { background: #f1f1f1; text-transform: uppercase; font-size: 10px; }
+        </style>
+      </head>
+      <body>
+        <h1>Reporte votos Lider POSITIVOS y DUDOSOS</h1>
+        <p>Generado: ${escapeHtml(generatedAt)} | Total: ${reportRecords.length}</p>
+        <div class="summary">
+          <span>POSITIVOS: ${positiveCount}</span>
+          <span>DUDOSOS: ${doubtfulCount}</span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Estado Lider</th>
+              <th>Apellidos</th>
+              <th>Nombres</th>
+              <th>Cedula</th>
+              <th>Local</th>
+              <th>Mesa</th>
+              <th>Orden</th>
+              <th>Barrio/compania</th>
+            </tr>
+          </thead>
+          <tbody>${rows || `<tr><td colspan="8">No hay votos POSITIVOS o DUDOSOS para Lider.</td></tr>`}</tbody>
+        </table>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.focus();
+  registerAction("Genero reporte PDF", `Votos Lider positivos/dudosos: ${reportRecords.length}`);
+  printWindow.print();
 }
 
 function renderStatusCards(container, counts, totalLabel) {
@@ -2048,6 +2090,7 @@ printNeighborhoodPdf.addEventListener("click", generateNeighborhoodPdf);
 printMobilePdf.addEventListener("click", () => generateBenefitPdf("movil", "Moviles"));
 printRefundPdf.addEventListener("click", () => generateBenefitPdf("devolucion", "Devolucion de Pasaje"));
 printPaymentPdf.addEventListener("click", () => generateBenefitPdf("pago", "Pagos"));
+printLiderVotesPdf.addEventListener("click", generateLiderVotesPdf);
 document.querySelector("#applyBulk").addEventListener("click", applyBulkChanges);
 document.querySelector("#clearBulkFields").addEventListener("click", clearSelectedFields);
 bulkFields.benefitType.addEventListener("change", () => {
