@@ -111,6 +111,7 @@ const editModeHint = document.querySelector("#editModeHint");
 const viewSections = document.querySelectorAll(".view-section");
 const viewButtons = document.querySelectorAll("[data-view-button]");
 const viewOnlyControls = document.querySelectorAll("[data-view-only]");
+const requestSectorRemovalButton = document.querySelector("#requestSectorRemoval");
 const bulkFields = {
   benefitType: document.querySelector("#bulkBenefitType"),
   status: document.querySelector("#bulkStatus"),
@@ -466,6 +467,7 @@ function updateBulkEditorForSelection() {
     control.closest("label").hidden = sectorEditMode ? !allowedSectorField : pcOnlyMode && field !== "passedPc";
   });
   document.querySelector("#clearBulkFields").hidden = pcOnlyMode || sectorEditMode;
+  requestSectorRemovalButton.hidden = !sectorEditMode;
   const noPcOption = bulkFields.passedPc.querySelector('option[value="no"]');
   if (noPcOption) noPcOption.hidden = pcOnlyMode;
   if (sectorEditMode) {
@@ -475,6 +477,7 @@ function updateBulkEditorForSelection() {
     return false;
   }
   if (!pcOnlyMode) return false;
+  requestSectorRemovalButton.hidden = true;
   editModeHint.textContent = `${loadedRecordMessage(loadedRecord)} Puedes visualizarlos, pero no editarlos.`;
   return true;
 }
@@ -1989,6 +1992,48 @@ async function clearSelectedFields() {
   showSystemAlert(`Se dejaron en blanco ${ids.length} registros.`);
 }
 
+async function requestSectorRemoval() {
+  const selected = records.filter((record) => selectedRecords.has(record.id));
+  if (!selected.length) {
+    showSystemAlert("Seleccione al menos un registro.");
+    return;
+  }
+  const sectorType = currentSectorEditType();
+  if (!sectorType || selected.some((record) => !canSectorEditLoadedRecord(record))) {
+    showSystemAlert("Solo puede solicitar quitar tipo para registros de su sector.");
+    return;
+  }
+
+  const confirmed = await showSystemConfirm("Se avisara al admin para que quite o cambie el tipo de este registro. Desea enviar la solicitud?", "Avisar al admin");
+  if (!confirmed) return;
+
+  const sectorLabel = sectorType === "movil" ? "Moviles" : "Devolucion de Pasaje";
+  const detail = selected.map((record) => {
+    const name = `${fixNameText(record.lastNames)} ${fixNameText(record.firstNames || record.fullName || "")}`.trim();
+    return `CI ${record.documentNumber} - ${name || "Sin nombre"}`;
+  }).join(" | ");
+  const action = `Solicitud admin: quitar tipo ${sectorLabel}`;
+
+  try {
+    await apiRequest("/api/audit", {
+      method: "POST",
+      body: JSON.stringify({ action, detail }),
+    });
+    auditLog.unshift({
+      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      date: new Date().toISOString(),
+      user: currentUserLabel(),
+      action,
+      detail,
+    });
+    auditLog = auditLog.slice(0, 1000);
+    saveAuditLog();
+    showSystemAlert("Solicitud enviada al admin. El admin la vera en Reporte del sistema.");
+  } catch (error) {
+    showSystemAlert(error.message);
+  }
+}
+
 function toCsvValue(value) {
   return `"${String(value ?? "").replace(/"/g, '""')}"`;
 }
@@ -2144,6 +2189,7 @@ printRefundPdf.addEventListener("click", () => generateBenefitPdf("devolucion", 
 printPaymentPdf.addEventListener("click", () => generateBenefitPdf("pago", "Pagos"));
 printLiderVotesPdfButtons.forEach((button) => button.addEventListener("click", generateLiderVotesPdf));
 document.querySelector("#applyBulk").addEventListener("click", applyBulkChanges);
+requestSectorRemovalButton.addEventListener("click", requestSectorRemoval);
 document.querySelector("#clearBulkFields").addEventListener("click", clearSelectedFields);
 bulkFields.benefitType.addEventListener("change", () => {
   if (bulkFields.benefitType.value === "pago") bulkFields.amount.value = "100000";
