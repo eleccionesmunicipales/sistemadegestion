@@ -303,7 +303,7 @@ async function findPcLockedRecord(ids) {
   if (!cleanIds.length) return null;
   const { data, error } = await supabase
     .from("records")
-    .select("id, passed_pc, pc_marked_by, neighborhood")
+    .select("id, passed_pc, pc_marked_by, neighborhood, benefit_type")
     .in("id", cleanIds)
     .eq("passed_pc", true)
     .limit(1);
