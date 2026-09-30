@@ -456,7 +456,7 @@ app.put("/api/records/:id", requireAuth, async (req, res) => {
   if (isConcejaliaLider(req.user)) {
     const { data, error } = await supabase
       .from("records")
-      .update({ status_lider: statusValue(req.body.statusLider), updated_by: req.user.username })
+      .update({ status_lider: statusValue(req.body.statusLider) })
       .eq("id", req.params.id)
       .select("id, first_names, last_names, full_name, birth_date, sex, document_number, polling_place, table_number, order_number, neighborhood, status, status_lider, voted")
       .maybeSingle();
@@ -499,7 +499,7 @@ app.post("/api/records/bulk", requireAuth, async (req, res) => {
     for (const id of ids) {
       const { data: updatedRows, error } = await supabase
         .from("records")
-        .update({ voted: incomingById.get(id), updated_by: req.user.username })
+        .update({ voted: incomingById.get(id) })
         .eq("id", id)
         .select("id");
       if (error) return res.status(400).json({ error: error.message });
@@ -519,7 +519,7 @@ app.post("/api/records/bulk", requireAuth, async (req, res) => {
     for (const record of records) {
       const { data: updatedRows, error } = await supabase
         .from("records")
-        .update({ status_lider: statusValue(record.statusLider), updated_by: req.user.username })
+        .update({ status_lider: statusValue(record.statusLider) })
         .eq("id", String(record.id))
         .select("id");
       if (error) {
