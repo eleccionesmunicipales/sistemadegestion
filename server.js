@@ -237,6 +237,15 @@ function isConcejaliaLider(user) {
   return functionKey.includes("concejalia") && functionKey.includes("lider");
 }
 
+function canUseMobileSector(user) {
+  return normalizeKey(user.function_name).includes("movil");
+}
+
+function canUseRefundSector(user) {
+  const functionKey = normalizeKey(user.function_name);
+  return functionKey.includes("devolucion") || functionKey.includes("pasaje");
+}
+
 function publicUpdatedBy(username) {
   const userKey = normalizeKey(username);
   if (userKey === "liderconcejal") return "";
@@ -298,6 +307,44 @@ function isOnlyPcMark(existingRecord, payload) {
     && Number(existingRecord.amount || 0) === Number(payload.amount || 0);
 }
 
+function isAllowedSectorUpdate(user, existingRecord, payload) {
+  const sectorType = existingRecord.benefit_type;
+  const canUseSector = sectorType === "movil" ? canUseMobileSector(user) : sectorType === "devolucion" && canUseRefundSector(user);
+  if (!canUseSector) return false;
+  if (!sectorType || existingRecord.benefit_type !== sectorType || payload.benefit_type !== sectorType) return false;
+  if (Number(payload.amount || 0) <= 0) return false;
+  if (sectorType === "movil" && !["completo", "parcial"].includes(payload.mobile_type)) return false;
+
+  const allowedChanges = sectorType === "movil"
+    ? new Set(["amount", "mobile_type", "updated_by"])
+    : new Set(["amount", "updated_by"]);
+  const fields = [
+    "first_names",
+    "last_names",
+    "full_name",
+    "birth_date",
+    "sex",
+    "document_number",
+    "polling_place",
+    "table_number",
+    "order_number",
+    "neighborhood",
+    "status",
+    "status_lider",
+    "benefit_type",
+    "city",
+    "mobile_type",
+    "passed_pc",
+    "pc_marked_by",
+    "voted",
+    "block_number",
+    "amount",
+    "updated_by",
+  ];
+
+  return fields.every((field) => allowedChanges.has(field) || sameRecordValue(existingRecord[field], payload[field]));
+}
+
 async function findPcLockedRecord(ids) {
   const cleanIds = ids.map((id) => String(id)).filter(Boolean);
   if (!cleanIds.length) return null;
@@ -322,6 +369,7 @@ async function preventPcLockedEdit(req, res, ids) {
 function preventLoadedRecordEdit(req, res, existingRecord, payload) {
   if (req.user.role === "admin" || !existingRecord || !hasOperationalLoad(existingRecord)) return false;
   if (isOnlyPcMark(existingRecord, payload)) return false;
+  if (isAllowedSectorUpdate(req.user, existingRecord, payload)) return false;
   res.status(403).json({ error: loadedRecordMessage(existingRecord) });
   return true;
 }
@@ -558,7 +606,10 @@ app.post("/api/records/bulk", requireAuth, async (req, res) => {
 
     const loadedRecord = payload.find((record) => {
       const existingRecord = existingById.get(record.id);
-      return existingRecord && hasOperationalLoad(existingRecord) && !isOnlyPcMark(existingRecord, record);
+      return existingRecord
+        && hasOperationalLoad(existingRecord)
+        && !isOnlyPcMark(existingRecord, record)
+        && !isAllowedSectorUpdate(req.user, existingRecord, record);
     });
     if (loadedRecord) return res.status(403).json({ error: loadedRecordMessage(existingById.get(loadedRecord.id)) });
   }

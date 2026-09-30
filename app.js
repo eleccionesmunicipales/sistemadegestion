@@ -458,13 +458,22 @@ function hasBulkNonPcChanges() {
 
 function updateBulkEditorForSelection() {
   const loadedRecord = lockedSelectedLoadedRecord();
+  const sectorType = currentSectorEditType();
+  const sectorEditMode = Boolean(loadedRecord && sectorType && loadedRecord.benefitType === sectorType);
   const pcOnlyMode = Boolean(loadedRecord && !loadedRecord.passedPc);
   Object.entries(bulkFields).forEach(([field, control]) => {
-    control.closest("label").hidden = pcOnlyMode && field !== "passedPc";
+    const allowedSectorField = field === "amount" || (sectorType === "movil" && field === "mobileType");
+    control.closest("label").hidden = sectorEditMode ? !allowedSectorField : pcOnlyMode && field !== "passedPc";
   });
-  document.querySelector("#clearBulkFields").hidden = pcOnlyMode;
+  document.querySelector("#clearBulkFields").hidden = pcOnlyMode || sectorEditMode;
   const noPcOption = bulkFields.passedPc.querySelector('option[value="no"]');
   if (noPcOption) noPcOption.hidden = pcOnlyMode;
+  if (sectorEditMode) {
+    editModeHint.textContent = sectorType === "movil"
+      ? "Edicion de Moviles: cargue monto y seleccione movil completo o parcial."
+      : "Edicion de Devolucion de Pasaje: cargue monto para guardar.";
+    return false;
+  }
   if (!pcOnlyMode) return false;
   editModeHint.textContent = `${loadedRecordMessage(loadedRecord)} Puedes visualizarlos, pero no editarlos.`;
   return true;
@@ -477,6 +486,41 @@ function isWatcher(user = currentUser) {
 function isConcejaliaLider(user = currentUser) {
   const functionKey = normalizeKey(user?.functionName);
   return functionKey.includes("concejalia") && functionKey.includes("lider");
+}
+
+function canUseMobileSector(user = currentUser) {
+  return normalizeKey(user?.functionName).includes("movil");
+}
+
+function canUseRefundSector(user = currentUser) {
+  const functionKey = normalizeKey(user?.functionName);
+  return functionKey.includes("devolucion") || functionKey.includes("pasaje");
+}
+
+function currentSectorEditType() {
+  if (currentView === "mobile" && canUseMobileSector()) return "movil";
+  if (currentView === "refund" && canUseRefundSector()) return "devolucion";
+  return "";
+}
+
+function canSectorEditLoadedRecord(record) {
+  const sectorType = currentSectorEditType();
+  return Boolean(sectorType && record?.benefitType === sectorType);
+}
+
+function sectorEditValidationMessage(selected) {
+  const sectorType = currentSectorEditType();
+  if (!sectorType) return "";
+  const invalidRecord = selected.find((record) => {
+    if (record.benefitType !== sectorType) return true;
+    const nextAmount = normalize(bulkFields.amount.value) === "" ? Number(record.amount || 0) : Number(bulkFields.amount.value || 0);
+    const nextMobileType = bulkFields.mobileType.value || record.mobileType || "";
+    return nextAmount <= 0 || (sectorType === "movil" && !["completo", "parcial"].includes(nextMobileType));
+  });
+  if (!invalidRecord) return "";
+  if (invalidRecord.benefitType !== sectorType) return "Solo puede editar registros del tipo correspondiente a esta vista.";
+  if (sectorType === "movil") return "Para guardar Moviles debe cargar un monto y seleccionar movil completo o parcial.";
+  return "Para guardar Devolucion de Pasaje debe cargar un monto.";
 }
 
 function defaultViewForUser(user = currentUser) {
@@ -620,9 +664,8 @@ function allowedViewsForUser(user) {
   if (isConcejaliaLider(user)) return ["lider", "liderStats"];
 
   const allowed = ["operations"];
-  const functionKey = normalizeKey(user.functionName);
-  if (functionKey.includes("movil")) allowed.push("mobile");
-  if (functionKey.includes("devolucion") || functionKey.includes("pasaje")) allowed.push("refund");
+  if (canUseMobileSector(user)) allowed.push("mobile");
+  if (canUseRefundSector(user)) allowed.push("refund");
   return allowed;
 }
 
@@ -1782,6 +1825,7 @@ recordsBody.addEventListener("click", (event) => {
       showSystemAlert(pcLockedMessage(record));
       return;
     }
+    resetBulkFields();
     selectedRecords.clear();
     selectedRecords.add(record.id);
     bulkEditorOpen = true;
@@ -1833,6 +1877,7 @@ async function toggleVoted(record) {
 
 async function applyBulkChanges() {
   const ids = Array.from(selectedRecords);
+  const selected = records.filter((record) => selectedRecords.has(record.id));
   if (!ids.length) {
     showSystemAlert("Seleccione al menos un registro.");
     return;
@@ -1843,7 +1888,12 @@ async function applyBulkChanges() {
     return;
   }
   const loadedRecord = lockedSelectedLoadedRecord();
-  if (loadedRecord && (bulkFields.passedPc.value !== "si" || hasBulkNonPcChanges())) {
+  const sectorMessage = loadedRecord && canSectorEditLoadedRecord(loadedRecord) ? sectorEditValidationMessage(selected) : "";
+  if (sectorMessage) {
+    showSystemAlert(sectorMessage);
+    return;
+  }
+  if (loadedRecord && !canSectorEditLoadedRecord(loadedRecord) && (bulkFields.passedPc.value !== "si" || hasBulkNonPcChanges())) {
     showSystemAlert(loadedRecordMessage(loadedRecord));
     return;
   }
