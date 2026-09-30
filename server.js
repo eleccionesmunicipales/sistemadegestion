@@ -60,6 +60,7 @@ function toRecord(row) {
     pcMarkedBy: row.pc_marked_by || "",
     voted: Boolean(row.voted),
     blockNumber: row.block_number || "",
+    updatedBy: row.updated_by || "",
   };
 }
 
@@ -240,6 +241,51 @@ function pcLockedMessage(record) {
   return `Esta cedula ya pasó por PC. Zona: ${record.neighborhood || "Sin dato"}. Usuario: ${record.pc_marked_by || "Sin dato"}`;
 }
 
+function loadedRecordMessage(record) {
+  return `Esta cedula ya fue cargada. Zona: ${record.neighborhood || "Sin dato"}. Usuario: ${record.updated_by || "Sin dato"}`;
+}
+
+function hasOperationalLoad(record) {
+  return Boolean(
+    record?.benefit_type
+    || record?.status
+    || Number(record?.amount || 0) > 0
+    || record?.city
+    || record?.neighborhood
+    || record?.mobile_type
+    || record?.block_number
+  );
+}
+
+function sameRecordValue(left, right) {
+  return String(left ?? "") === String(right ?? "");
+}
+
+function isOnlyPcMark(existingRecord, payload) {
+  if (existingRecord.passed_pc || !payload.passed_pc) return false;
+  const fields = [
+    "first_names",
+    "last_names",
+    "full_name",
+    "birth_date",
+    "sex",
+    "document_number",
+    "polling_place",
+    "table_number",
+    "order_number",
+    "neighborhood",
+    "status",
+    "status_lider",
+    "benefit_type",
+    "city",
+    "mobile_type",
+    "voted",
+    "block_number",
+  ];
+  return fields.every((field) => sameRecordValue(existingRecord[field], payload[field]))
+    && Number(existingRecord.amount || 0) === Number(payload.amount || 0);
+}
+
 async function findPcLockedRecord(ids) {
   const cleanIds = ids.map((id) => String(id)).filter(Boolean);
   if (!cleanIds.length) return null;
@@ -258,6 +304,13 @@ async function preventPcLockedEdit(req, res, ids) {
   const lockedRecord = await findPcLockedRecord(ids);
   if (!lockedRecord) return false;
   res.status(403).json({ error: pcLockedMessage(lockedRecord) });
+  return true;
+}
+
+function preventLoadedRecordEdit(req, res, existingRecord, payload) {
+  if (req.user.role === "admin" || !existingRecord || !hasOperationalLoad(existingRecord)) return false;
+  if (isOnlyPcMark(existingRecord, payload)) return false;
+  res.status(403).json({ error: loadedRecordMessage(existingRecord) });
   return true;
 }
 
@@ -400,11 +453,6 @@ app.get("/api/records", requireAuth, async (req, res) => {
 
 app.put("/api/records/:id", requireAuth, async (req, res) => {
   if (isWatcher(req.user)) return res.status(403).json({ error: "Los veedores solo pueden marcar VOTO/NO VOTO" });
-  try {
-    if (await preventPcLockedEdit(req, res, [req.params.id])) return;
-  } catch (error) {
-    return res.status(400).json({ error: error.message });
-  }
   if (isConcejaliaLider(req.user)) {
     const { data, error } = await supabase
       .from("records")
@@ -424,8 +472,11 @@ app.put("/api/records/:id", requireAuth, async (req, res) => {
     await writeAudit(req.user, "Marco estado Lider", `CI ${data.document_number}`);
     return res.json(toLiderRecord(data));
   }
-  const { data: existing } = await supabase.from("records").select("id, passed_pc, pc_marked_by, status_lider").eq("id", req.params.id).maybeSingle();
+  const { data: existing, error: existingError } = await supabase.from("records").select("*").eq("id", req.params.id).maybeSingle();
+  if (existingError) return res.status(400).json({ error: existingError.message });
   const payload = fromRecord({ ...req.body, id: req.params.id }, req.user.username, existing);
+  if (req.user.role !== "admin" && existing?.passed_pc) return res.status(403).json({ error: pcLockedMessage(existing) });
+  if (preventLoadedRecordEdit(req, res, existing, payload)) return;
   const { data, error } = await supabase.from("records").upsert(payload).select("*").single();
   if (error) return res.status(400).json({ error: error.message });
   await writeAudit(req.user, "Actualizo registro", `CI ${payload.document_number}`);
@@ -485,10 +536,20 @@ app.post("/api/records/bulk", requireAuth, async (req, res) => {
     return res.json({ ok: true, count: ids.length });
   }
 
-  const { data: existingRows, error: existingError } = await supabase.from("records").select("id, passed_pc, pc_marked_by, status_lider").in("id", ids);
+  const { data: existingRows, error: existingError } = await supabase.from("records").select("*").in("id", ids);
   if (existingError) return res.status(400).json({ error: existingError.message });
   const existingById = new Map((existingRows || []).map((record) => [record.id, record]));
   const payload = records.map((record) => fromRecord(record, req.user.username, existingById.get(String(record.id))));
+  if (req.user.role !== "admin") {
+    const pcLockedRecord = payload.map((record) => existingById.get(record.id)).find((record) => record?.passed_pc);
+    if (pcLockedRecord) return res.status(403).json({ error: pcLockedMessage(pcLockedRecord) });
+
+    const loadedRecord = payload.find((record) => {
+      const existingRecord = existingById.get(record.id);
+      return existingRecord && hasOperationalLoad(existingRecord) && !isOnlyPcMark(existingRecord, record);
+    });
+    if (loadedRecord) return res.status(403).json({ error: loadedRecordMessage(existingById.get(loadedRecord.id)) });
+  }
   const { error } = await supabase.from("records").upsert(payload);
   if (error) return res.status(400).json({ error: error.message });
   const pcMarked = payload.filter((record) => record.passed_pc && record.pc_marked_by === req.user.username).length;

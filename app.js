@@ -375,6 +375,39 @@ function lockedSelectedPcRecord() {
   return records.find((record) => selectedRecords.has(record.id) && record.passedPc) || null;
 }
 
+function loadedRecordMessage(record) {
+  return `Esta cedula ya fue cargada. Zona: ${record.neighborhood || "Sin dato"}. Usuario: ${record.updatedBy || "Sin dato"}`;
+}
+
+function hasOperationalLoad(record) {
+  return Boolean(
+    record?.benefitType
+    || record?.status
+    || Number(record?.amount || 0) > 0
+    || record?.city
+    || record?.neighborhood
+    || record?.mobileType
+    || record?.blockNumber
+  );
+}
+
+function lockedSelectedLoadedRecord() {
+  if (isAdmin()) return null;
+  return records.find((record) => selectedRecords.has(record.id) && hasOperationalLoad(record)) || null;
+}
+
+function hasBulkNonPcChanges() {
+  return Boolean(
+    bulkFields.benefitType.value
+    || bulkFields.status.value
+    || normalize(bulkFields.amount.value) !== ""
+    || normalize(bulkFields.city.value) !== ""
+    || bulkFields.neighborhood.value
+    || bulkFields.mobileType.value
+    || normalize(bulkFields.blockNumber.value) !== ""
+  );
+}
+
 function isWatcher(user = currentUser) {
   return normalizeKey(user?.functionName).includes("veedor");
 }
@@ -1665,6 +1698,10 @@ function resetBulkFields() {
 }
 
 async function toggleVoted(record) {
+  if (!isAdmin() && !isWatcher() && hasOperationalLoad(record)) {
+    alert(loadedRecordMessage(record));
+    return;
+  }
   const previousRecords = records;
   const nextVoted = !record.voted;
   pendingVoteUpdates.set(record.id, nextVoted);
@@ -1698,6 +1735,11 @@ async function applyBulkChanges() {
   const lockedRecord = lockedSelectedPcRecord();
   if (lockedRecord) {
     alert(pcLockedMessage(lockedRecord));
+    return;
+  }
+  const loadedRecord = lockedSelectedLoadedRecord();
+  if (loadedRecord && (bulkFields.passedPc.value !== "si" || hasBulkNonPcChanges())) {
+    alert(loadedRecordMessage(loadedRecord));
     return;
   }
 
@@ -1749,6 +1791,11 @@ async function clearSelectedFields() {
   const lockedRecord = lockedSelectedPcRecord();
   if (lockedRecord) {
     alert(pcLockedMessage(lockedRecord));
+    return;
+  }
+  const loadedRecord = lockedSelectedLoadedRecord();
+  if (loadedRecord) {
+    alert(loadedRecordMessage(loadedRecord));
     return;
   }
 
