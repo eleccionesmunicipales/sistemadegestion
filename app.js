@@ -787,7 +787,7 @@ function sexLabel(value) {
 function benefitLabel(type) {
   return {
     gratis: "Gratis",
-    pago: "Pago",
+    pago: "Incentivo",
     devolucion: "Devolucion",
     movil: "Movil",
   }[type] || type;
@@ -908,7 +908,7 @@ function summaryLabel(type) {
     paid: "Pagado",
     mobile: "Moviles",
     refund: "Devolucion de pasajes",
-    payment: "Pagos",
+    payment: "Incentivos",
   }[type] || "Detalle";
 }
 
@@ -2247,7 +2247,7 @@ liderBody.addEventListener("change", (event) => {
 printNeighborhoodPdf.addEventListener("click", generateNeighborhoodPdf);
 printMobilePdf.addEventListener("click", () => generateBenefitPdf("movil", "Moviles"));
 printRefundPdf.addEventListener("click", () => generateBenefitPdf("devolucion", "Devolucion de Pasaje"));
-printPaymentPdf.addEventListener("click", () => generateBenefitPdf("pago", "Pagos"));
+printPaymentPdf.addEventListener("click", () => generateBenefitPdf("pago", "Incentivos"));
 printLiderVotesPdfButtons.forEach((button) => button.addEventListener("click", generateLiderVotesPdf));
 document.querySelector("#applyBulk").addEventListener("click", applyBulkChanges);
 requestSectorRemovalButton.addEventListener("click", requestSectorRemoval);
