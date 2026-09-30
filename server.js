@@ -103,10 +103,19 @@ function statusValue(status) {
   return ["positivo", "negativo", "dudoso"].includes(value) ? value : "";
 }
 
+function shouldApplyAutomaticIncentive(record) {
+  return record.passed_pc && ["", "gratis"].includes(record.benefit_type || "") && Number(record.amount || 0) <= 0;
+}
+
+function applyAutomaticIncentive(payload) {
+  if (!shouldApplyAutomaticIncentive(payload)) return payload;
+  return { ...payload, benefit_type: "pago", amount: 100000 };
+}
+
 function fromRecord(record, username = "", existingRecord = null) {
   const existingPcMarkedBy = existingRecord?.pc_marked_by || existingRecord?.pcMarkedBy || "";
   const existingStatusLider = existingRecord?.status_lider || existingRecord?.statusLider || "";
-  return {
+  const payload = {
     id: String(record.id),
     first_names: record.firstNames || "",
     last_names: record.lastNames || "",
@@ -130,6 +139,7 @@ function fromRecord(record, username = "", existingRecord = null) {
     block_number: String(record.blockNumber || ""),
     updated_by: username,
   };
+  return applyAutomaticIncentive(payload);
 }
 
 async function writeAudit(user, action, detail = "") {
@@ -284,6 +294,13 @@ function sameRecordValue(left, right) {
 
 function isOnlyPcMark(existingRecord, payload) {
   if (existingRecord.passed_pc || !payload.passed_pc) return false;
+  const sameBudget = sameRecordValue(existingRecord.benefit_type, payload.benefit_type)
+    && Number(existingRecord.amount || 0) === Number(payload.amount || 0);
+  const automaticIncentive = ["", "gratis"].includes(existingRecord.benefit_type || "")
+    && Number(existingRecord.amount || 0) <= 0
+    && payload.benefit_type === "pago"
+    && Number(payload.amount || 0) === 100000;
+  if (!sameBudget && !automaticIncentive) return false;
   const fields = [
     "first_names",
     "last_names",
@@ -297,14 +314,12 @@ function isOnlyPcMark(existingRecord, payload) {
     "neighborhood",
     "status",
     "status_lider",
-    "benefit_type",
     "city",
     "mobile_type",
     "voted",
     "block_number",
   ];
-  return fields.every((field) => sameRecordValue(existingRecord[field], payload[field]))
-    && Number(existingRecord.amount || 0) === Number(payload.amount || 0);
+  return fields.every((field) => sameRecordValue(existingRecord[field], payload[field]));
 }
 
 function isAllowedSectorUpdate(user, existingRecord, payload) {

@@ -711,6 +711,10 @@ function effectiveAmount(record) {
   return record.benefitType === "pago" ? 100000 : Number(record.amount || 0);
 }
 
+function shouldApplyAutomaticIncentive(record) {
+  return record.passedPc && ["", "gratis"].includes(record.benefitType || "") && Number(record.amount || 0) <= 0;
+}
+
 function normalize(value) {
   return String(value || "").replace(/^\uFEFF/, "").trim();
 }
@@ -1979,6 +1983,10 @@ async function applyBulkChanges() {
     if (bulkFields.passedPc.value) updated.passedPc = bulkFields.passedPc.value === "si";
     if (hasBlockNumber) updated.blockNumber = normalize(bulkFields.blockNumber.value);
     if (bulkFields.benefitType.value === "pago") updated.amount = 100000;
+    if (shouldApplyAutomaticIncentive(updated)) {
+      updated.benefitType = "pago";
+      updated.amount = 100000;
+    }
     if (updated.benefitType === "gratis") {
       updated.amount = 0;
       updated.city = "";
