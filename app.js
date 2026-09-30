@@ -2,6 +2,7 @@ const STORAGE_KEY = "padron-electoral-registros";
 const USERS_KEY = "padron-electoral-usuarios";
 const SESSION_KEY = "padron-electoral-sesion";
 const AUDIT_KEY = "padron-electoral-auditoria";
+const ADMIN_ALERTS_SEEN_KEY = "padron-electoral-admin-alertas-vistas";
 const API_BASE = window.location.origin;
 const LIVE_SYNC_MS = 10000;
 const MAX_RENDERED_ROWS = 400;
@@ -210,6 +211,19 @@ function saveAuditLog() {
   lastAuditJson = localStorage.getItem(AUDIT_KEY) || "";
 }
 
+function loadSeenAdminAlerts() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(ADMIN_ALERTS_SEEN_KEY));
+    return new Set(Array.isArray(saved) ? saved : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveSeenAdminAlerts(seenAlerts) {
+  localStorage.setItem(ADMIN_ALERTS_SEEN_KEY, JSON.stringify(Array.from(seenAlerts).slice(-300)));
+}
+
 async function apiRequest(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -267,6 +281,22 @@ async function loadAdminViewData() {
     return true;
   }
   return false;
+}
+
+async function checkAdminAlerts() {
+  if (!isAdmin() || !authToken) return false;
+  const remoteAuditLog = await apiRequest("/api/audit");
+  auditLog = remoteAuditLog;
+  saveAuditLog();
+  if (currentView === "report") renderReport();
+
+  const seenAlerts = loadSeenAdminAlerts();
+  const request = remoteAuditLog.find((item) => String(item.action || "").startsWith("Solicitud admin:") && !seenAlerts.has(String(item.id)));
+  if (!request) return false;
+  seenAlerts.add(String(request.id));
+  saveSeenAdminAlerts(seenAlerts);
+  showSystemAlert(`${request.action}\n\n${request.detail}\n\nSolicitado por: ${request.user}`, "Solicitud para admin");
+  return true;
 }
 
 function applyPendingVoteUpdates() {
@@ -332,8 +362,9 @@ async function syncLiveData() {
         await loadRemoteData({ includeAdminData: false });
         shouldRender = true;
       }
-      if (isAdmin() && (currentView === "users" || currentView === "report")) {
-        shouldRender = await loadAdminViewData() || shouldRender;
+      if (isAdmin()) {
+        if (currentView === "users" || currentView === "report") shouldRender = await loadAdminViewData() || shouldRender;
+        await checkAdminAlerts();
       }
       if (!canAccessView(currentView)) {
         currentView = defaultViewForUser();
@@ -1153,6 +1184,7 @@ async function login(username, password) {
   await loadRemoteData({ includeAdminData: false });
   await migrateLocalRecordsIfNeeded(localRecords);
   currentView = defaultViewForUser(data.user);
+  await checkAdminAlerts();
   return true;
 }
 
