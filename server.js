@@ -60,7 +60,7 @@ function toRecord(row) {
     pcMarkedBy: row.pc_marked_by || "",
     voted: Boolean(row.voted),
     blockNumber: row.block_number || "",
-    updatedBy: row.updated_by || "",
+    updatedBy: publicUpdatedBy(row.updated_by),
   };
 }
 
@@ -241,8 +241,14 @@ function pcLockedMessage(record) {
   return `Esta cedula ya pasó por PC. Zona: ${record.neighborhood || "Sin dato"}. Usuario: ${record.pc_marked_by || "Sin dato"}`;
 }
 
+function publicUpdatedBy(username) {
+  const userKey = normalizeKey(username);
+  if (userKey === "liderconcejal") return "";
+  return username || "";
+}
+
 function loadedRecordMessage(record) {
-  return `Esta cedula ya fue cargada previamente. Zona: ${record.neighborhood || "Sin dato"}. Usuario: ${record.updated_by || "Sin dato"}`;
+  return `Esta cedula ya fue cargada previamente. Zona: ${record.neighborhood || "Sin dato"}. Usuario: ${publicUpdatedBy(record.updated_by) || "Sin dato"}`;
 }
 
 function hasOperationalLoad(record) {

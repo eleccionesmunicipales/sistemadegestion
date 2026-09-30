@@ -370,13 +370,17 @@ function pcLockedMessage(record) {
   return `Esta cedula ya pasó por PC. Zona: ${record.neighborhood || "Sin dato"}. Usuario: ${record.pcMarkedBy || "Sin dato"}`;
 }
 
+function publicUpdatedBy(username) {
+  return normalizeKey(username) === "liderconcejal" ? "" : username || "";
+}
+
 function lockedSelectedPcRecord() {
   if (isAdmin()) return null;
   return records.find((record) => selectedRecords.has(record.id) && record.passedPc) || null;
 }
 
 function loadedRecordMessage(record) {
-  return `Esta cedula ya fue cargada previamente. Zona: ${record.neighborhood || "Sin dato"}. Usuario: ${record.updatedBy || "Sin dato"}`;
+  return `Esta cedula ya fue cargada previamente. Zona: ${record.neighborhood || "Sin dato"}. Usuario: ${publicUpdatedBy(record.updatedBy) || "Sin dato"}`;
 }
 
 function hasOperationalLoad(record) {
