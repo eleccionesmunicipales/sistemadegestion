@@ -102,7 +102,7 @@ const liderExitPollGeneral = document.querySelector("#liderExitPollGeneral");
 const liderExitPollChart = document.querySelector("#liderExitPollChart");
 const liderBody = document.querySelector("#liderBody");
 const liderEmpty = document.querySelector("#liderEmpty");
-const printLiderVotesPdf = document.querySelector("#printLiderVotesPdf");
+const printLiderVotesPdfButtons = document.querySelectorAll("[data-lider-votes-pdf]");
 const reportPanel = document.querySelector("#reportPanel");
 const auditLogBody = document.querySelector("#auditLogBody");
 const auditLogEmpty = document.querySelector("#auditLogEmpty");
@@ -2090,7 +2090,7 @@ printNeighborhoodPdf.addEventListener("click", generateNeighborhoodPdf);
 printMobilePdf.addEventListener("click", () => generateBenefitPdf("movil", "Moviles"));
 printRefundPdf.addEventListener("click", () => generateBenefitPdf("devolucion", "Devolucion de Pasaje"));
 printPaymentPdf.addEventListener("click", () => generateBenefitPdf("pago", "Pagos"));
-printLiderVotesPdf.addEventListener("click", generateLiderVotesPdf);
+printLiderVotesPdfButtons.forEach((button) => button.addEventListener("click", generateLiderVotesPdf));
 document.querySelector("#applyBulk").addEventListener("click", applyBulkChanges);
 document.querySelector("#clearBulkFields").addEventListener("click", clearSelectedFields);
 bulkFields.benefitType.addEventListener("change", () => {
