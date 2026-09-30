@@ -462,15 +462,15 @@ function updateBulkEditorForSelection() {
   const sectorEditMode = Boolean(loadedRecord && sectorType && loadedRecord.benefitType === sectorType);
   const pcOnlyMode = Boolean(loadedRecord && !loadedRecord.passedPc);
   Object.entries(bulkFields).forEach(([field, control]) => {
-    control.closest("label").hidden = sectorEditMode ? field === "benefitType" : pcOnlyMode && field !== "passedPc";
+    control.closest("label").hidden = sectorEditMode ? false : pcOnlyMode && field !== "passedPc";
   });
   document.querySelector("#clearBulkFields").hidden = pcOnlyMode || sectorEditMode;
   const noPcOption = bulkFields.passedPc.querySelector('option[value="no"]');
   if (noPcOption) noPcOption.hidden = pcOnlyMode;
   if (sectorEditMode) {
     editModeHint.textContent = sectorType === "movil"
-      ? "Edicion de Moviles: puede editar el registro completo. Debe quedar con monto y movil completo o parcial."
-      : "Edicion de Devolucion de Pasaje: puede editar el registro completo. Debe quedar con monto.";
+      ? "Edicion de Moviles: puede editar el registro completo, incluido el tipo. Si queda como Movil debe tener monto y completo o parcial."
+      : "Edicion de Devolucion de Pasaje: puede editar el registro completo, incluido el tipo. Si queda como Devolucion debe tener monto.";
     return false;
   }
   if (!pcOnlyMode) return false;
@@ -512,14 +512,14 @@ function sectorEditValidationMessage(selected) {
   if (!sectorType) return "";
   const invalidRecord = selected.find((record) => {
     if (record.benefitType !== sectorType) return true;
+    const nextBenefitType = bulkFields.benefitType.value || record.benefitType;
     const nextAmount = normalize(bulkFields.amount.value) === "" ? Number(record.amount || 0) : Number(bulkFields.amount.value || 0);
     const nextMobileType = bulkFields.mobileType.value || record.mobileType || "";
-    return nextAmount <= 0 || (sectorType === "movil" && !["completo", "parcial"].includes(nextMobileType));
+    return ["devolucion", "movil"].includes(nextBenefitType) && (nextAmount <= 0 || (nextBenefitType === "movil" && !["completo", "parcial"].includes(nextMobileType)));
   });
   if (!invalidRecord) return "";
   if (invalidRecord.benefitType !== sectorType) return "Solo puede editar registros del tipo correspondiente a esta vista.";
-  if (sectorType === "movil") return "Para guardar Moviles debe cargar un monto y seleccionar movil completo o parcial.";
-  return "Para guardar Devolucion de Pasaje debe cargar un monto.";
+  return "Para guardar como Devolucion o Movil debe cargar un monto. Si queda como Movil, tambien debe seleccionar completo o parcial.";
 }
 
 function defaultViewForUser(user = currentUser) {
