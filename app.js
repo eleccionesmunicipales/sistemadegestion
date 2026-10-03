@@ -475,6 +475,7 @@ function publicUpdatedBy(username) {
 function pcSectorLabel(record) {
   if (record.benefitType === "devolucion") return " Devolucion de Pasaje.";
   if (record.benefitType === "movil") return " Movil.";
+  if (record.benefitType === "movil_devolucion") return " Movil y Devolucion de Pasaje.";
   return "";
 }
 
@@ -540,7 +541,7 @@ function updateBulkEditorForSelection() {
   const votedRecord = lockedSelectedVotedRecord();
   const loadedRecord = lockedSelectedLoadedRecord();
   const sectorType = currentSectorEditType();
-  const sectorEditMode = Boolean(!votedRecord && loadedRecord && sectorType && loadedRecord.benefitType === sectorType);
+  const sectorEditMode = Boolean(!votedRecord && loadedRecord && sectorType && benefitMatchesType(loadedRecord.benefitType, sectorType));
   const pcOnlyMode = Boolean(!votedRecord && loadedRecord && !loadedRecord.passedPc);
   Object.entries(bulkFields).forEach(([field, control]) => {
     const allowedSectorField = field === "amount" || field === "passedPc" || (sectorType === "movil" && field === "mobileType");
@@ -593,22 +594,22 @@ function currentSectorEditType() {
 
 function canSectorEditLoadedRecord(record) {
   const sectorType = currentSectorEditType();
-  return Boolean(sectorType && record?.benefitType === sectorType);
+  return Boolean(sectorType && benefitMatchesType(record?.benefitType, sectorType));
 }
 
 function sectorEditValidationMessage(selected) {
   const sectorType = currentSectorEditType();
   if (!sectorType) return "";
   const invalidRecord = selected.find((record) => {
-    if (record.benefitType !== sectorType) return true;
+    if (!benefitMatchesType(record.benefitType, sectorType)) return true;
     const nextBenefitType = bulkFields.benefitType.value || record.benefitType;
     const nextAmount = normalize(bulkFields.amount.value) === "" ? Number(record.amount || 0) : Number(bulkFields.amount.value || 0);
     const nextMobileType = bulkFields.mobileType.value || record.mobileType || "";
-    return nextBenefitType !== sectorType || nextAmount <= 0 || (sectorType === "movil" && !["completo", "parcial"].includes(nextMobileType));
+    return !benefitMatchesType(nextBenefitType, sectorType) || nextAmount <= 0 || (sectorType === "movil" && !["completo", "parcial"].includes(nextMobileType));
   });
   if (!invalidRecord) return "";
-  if (invalidRecord.benefitType !== sectorType) return "Solo puede editar registros del tipo correspondiente a esta vista.";
-  if ((bulkFields.benefitType.value || invalidRecord.benefitType) !== sectorType) return "Para quitar o cambiar el tipo debe avisar al admin.";
+  if (!benefitMatchesType(invalidRecord.benefitType, sectorType)) return "Solo puede editar registros del tipo correspondiente a esta vista.";
+  if (!benefitMatchesType(bulkFields.benefitType.value || invalidRecord.benefitType, sectorType)) return "Para quitar o cambiar el tipo debe avisar al admin.";
   if (sectorType === "movil") return "Para guardar Moviles debe cargar un monto y seleccionar movil completo o parcial.";
   return "Para guardar Devolucion de Pasaje debe cargar un monto.";
 }
@@ -819,7 +820,14 @@ function benefitLabel(type) {
     pago: "Incentivo",
     devolucion: "Devolucion",
     movil: "Movil",
+    movil_devolucion: "Movil y Devolucion",
   }[type] || type;
+}
+
+function benefitMatchesType(benefitType, type) {
+  if (!type) return true;
+  if (benefitType === type) return true;
+  return benefitType === "movil_devolucion" && ["movil", "devolucion"].includes(type);
 }
 
 function statusValue(status) {
@@ -836,6 +844,10 @@ function statusLabel(status) {
 }
 
 function getDetail(record) {
+  if (record.benefitType === "movil_devolucion") {
+    const mobileDetail = `Movil ${record.mobileType || "completo"}`;
+    return record.city ? `${mobileDetail} / Ciudad: ${record.city}` : mobileDetail;
+  }
   if (record.benefitType === "devolucion") return record.city ? `Ciudad: ${record.city}` : "Sin ciudad";
   if (record.benefitType === "movil") return `Movil ${record.mobileType || "completo"}`;
   return "-";
@@ -846,7 +858,7 @@ function getFilteredRecords() {
   const selectedNeighborhoods = getSelectedNeighborhoods();
   return records.filter((record) => {
     const viewType = currentView === "mobile" ? "movil" : currentView === "refund" ? "devolucion" : "";
-    const matchesType = viewType ? record.benefitType === viewType : (!filterType.value || record.benefitType === filterType.value);
+    const matchesType = viewType ? benefitMatchesType(record.benefitType, viewType) : (!filterType.value || record.benefitType === filterType.value);
     const matchesPc = !filterPc.value || (filterPc.value === "si" ? record.passedPc : !record.passedPc);
     const matchesVote = !filterVote.value || (filterVote.value === "si" ? record.voted : !record.voted);
     const liderStatus = statusValue(record.statusLider);
@@ -910,8 +922,8 @@ function renderStats() {
   document.querySelector("#paidAmount").textContent = money(records.reduce((sum, record) => {
     return record.passedPc ? sum + effectiveAmount(record) : sum;
   }, 0));
-  document.querySelector("#mobileCount").textContent = records.filter((record) => record.benefitType === "movil").length;
-  document.querySelector("#refundCount").textContent = records.filter((record) => record.benefitType === "devolucion").length;
+  document.querySelector("#mobileCount").textContent = records.filter((record) => benefitMatchesType(record.benefitType, "movil")).length;
+  document.querySelector("#refundCount").textContent = records.filter((record) => benefitMatchesType(record.benefitType, "devolucion")).length;
   document.querySelector("#paymentCount").textContent = records.filter((record) => record.benefitType === "pago").length;
   renderSummaryDetail();
   renderNeighborhoodSummary();
@@ -923,8 +935,8 @@ function getSummaryRecords(type) {
     pc: records.filter((record) => record.passedPc),
     budgeted: records.filter((record) => effectiveAmount(record) > 0),
     paid: records.filter((record) => record.passedPc && effectiveAmount(record) > 0),
-    mobile: records.filter((record) => record.benefitType === "movil"),
-    refund: records.filter((record) => record.benefitType === "devolucion"),
+    mobile: records.filter((record) => benefitMatchesType(record.benefitType, "movil")),
+    refund: records.filter((record) => benefitMatchesType(record.benefitType, "devolucion")),
     payment: records.filter((record) => record.benefitType === "pago"),
   }[type] || [];
 }
@@ -1098,7 +1110,7 @@ function generateNeighborhoodPdf() {
 }
 
 function generateBenefitPdf(type, title) {
-  const reportRecords = records.filter((record) => record.benefitType === type);
+  const reportRecords = records.filter((record) => benefitMatchesType(record.benefitType, type));
   const generatedAt = new Date().toLocaleString("es-PY");
   const rows = reportRecords.map((record) => `
     <tr>

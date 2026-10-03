@@ -107,6 +107,12 @@ function shouldApplyAutomaticIncentive(record) {
   return record.passed_pc && ["", "gratis"].includes(record.benefit_type || "") && Number(record.amount || 0) <= 0;
 }
 
+function benefitMatchesType(benefitType, type) {
+  if (!type) return true;
+  if (benefitType === type) return true;
+  return benefitType === "movil_devolucion" && ["movil", "devolucion"].includes(type);
+}
+
 function applyAutomaticIncentive(payload) {
   if (!shouldApplyAutomaticIncentive(payload)) return payload;
   return { ...payload, benefit_type: "pago", amount: 100000 };
@@ -265,6 +271,7 @@ function publicUpdatedBy(username) {
 function pcSectorLabel(record) {
   if (record.benefit_type === "devolucion") return " Devolucion de Pasaje.";
   if (record.benefit_type === "movil") return " Movil.";
+  if (record.benefit_type === "movil_devolucion") return " Movil y Devolucion de Pasaje.";
   return "";
 }
 
@@ -339,15 +346,15 @@ function isOnlyPcMark(existingRecord, payload) {
 
 function isAllowedSectorUpdate(user, existingRecord, payload) {
   const sectorType = existingRecord.benefit_type;
-  const canUseSector = sectorType === "movil" ? canUseMobileSector(user) : sectorType === "devolucion" && canUseRefundSector(user);
+  const canUseSector = (benefitMatchesType(sectorType, "movil") && canUseMobileSector(user))
+    || (benefitMatchesType(sectorType, "devolucion") && canUseRefundSector(user));
   if (!canUseSector) return false;
-  if (!sectorType || existingRecord.benefit_type !== sectorType || payload.benefit_type !== sectorType) return false;
+  if (!sectorType || !benefitMatchesType(payload.benefit_type, sectorType)) return false;
   if (Number(payload.amount || 0) <= 0) return false;
-  if (sectorType === "movil" && !["completo", "parcial"].includes(payload.mobile_type)) return false;
+  if (benefitMatchesType(sectorType, "movil") && !["completo", "parcial"].includes(payload.mobile_type)) return false;
 
-  const allowedChanges = sectorType === "movil"
-    ? new Set(["amount", "mobile_type", "passed_pc", "pc_marked_by", "updated_by"])
-    : new Set(["amount", "passed_pc", "pc_marked_by", "updated_by"]);
+  const allowedChanges = new Set(["amount", "passed_pc", "pc_marked_by", "updated_by"]);
+  if (benefitMatchesType(sectorType, "movil") && canUseMobileSector(user)) allowedChanges.add("mobile_type");
   const fields = [
     "first_names",
     "last_names",
