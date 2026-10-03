@@ -478,12 +478,19 @@ function pcSectorLabel(record) {
   return "";
 }
 
+function userAlertLabel(username) {
+  const publicUsername = publicUpdatedBy(username);
+  if (!publicUsername) return "Sin dato";
+  const user = users.find((item) => normalizeKey(item.username) === normalizeKey(publicUsername));
+  return [publicUsername, user?.functionDescription].filter(Boolean).join(" - ");
+}
+
 function pcLockedMessage(record) {
-  return `Esta cedula ya pasó por PC. Barrio/compañia: ${record.neighborhood || "Sin dato"}.${pcSectorLabel(record)} Usuario: ${record.pcMarkedBy || "Sin dato"}`;
+  return `Esta cedula ya pasó por PC. Zona: ${record.neighborhood || "Sin dato"}.${pcSectorLabel(record)} Usuario: ${userAlertLabel(record.pcMarkedBy)}`;
 }
 
 function votedLockedMessage(record) {
-  return `Esta cedula ya fue marcada como VOTO. Barrio/compañia: ${record.neighborhood || "Sin dato"}. Solo ADMIN puede editarla.`;
+  return `Esta cedula ya fue marcada como VOTO. Zona: ${record.neighborhood || "Sin dato"}. Solo ADMIN puede editarla.`;
 }
 
 function lockedSelectedPcRecord() {
@@ -497,7 +504,7 @@ function lockedSelectedVotedRecord() {
 }
 
 function loadedRecordMessage(record) {
-  return `Esta cedula ya fue cargada previamente. Zona: ${record.neighborhood || "Sin dato"}. Usuario: ${publicUpdatedBy(record.updatedBy) || "Sin dato"}`;
+  return `Esta cedula ya fue cargada previamente. Zona: ${record.neighborhood || "Sin dato"}. Usuario: ${userAlertLabel(record.updatedBy)}`;
 }
 
 function hasOperationalLoad(record) {

@@ -268,16 +268,27 @@ function pcSectorLabel(record) {
   return "";
 }
 
-function pcLockedMessage(record) {
-  return `Esta cedula ya pasó por PC. Barrio/compañia: ${record.neighborhood || "Sin dato"}.${pcSectorLabel(record)} Usuario: ${record.pc_marked_by || "Sin dato"}`;
+async function userAlertLabel(username) {
+  const publicUsername = publicUpdatedBy(username);
+  if (!publicUsername) return "Sin dato";
+  const { data } = await supabase
+    .from("app_users")
+    .select("function_description")
+    .eq("username", publicUsername)
+    .maybeSingle();
+  return [publicUsername, data?.function_description].filter(Boolean).join(" - ");
+}
+
+async function pcLockedMessage(record) {
+  return `Esta cedula ya pasó por PC. Zona: ${record.neighborhood || "Sin dato"}.${pcSectorLabel(record)} Usuario: ${await userAlertLabel(record.pc_marked_by)}`;
 }
 
 function votedLockedMessage(record) {
-  return `Esta cedula ya fue marcada como VOTO. Barrio/compañia: ${record.neighborhood || "Sin dato"}. Solo ADMIN puede editarla.`;
+  return `Esta cedula ya fue marcada como VOTO. Zona: ${record.neighborhood || "Sin dato"}. Solo ADMIN puede editarla.`;
 }
 
-function loadedRecordMessage(record) {
-  return `Esta cedula ya fue cargada previamente. Zona: ${record.neighborhood || "Sin dato"}. Usuario: ${publicUpdatedBy(record.updated_by) || "Sin dato"}`;
+async function loadedRecordMessage(record) {
+  return `Esta cedula ya fue cargada previamente. Zona: ${record.neighborhood || "Sin dato"}. Usuario: ${await userAlertLabel(record.updated_by)}`;
 }
 
 function hasOperationalLoad(record) {
@@ -402,15 +413,15 @@ async function preventPcLockedEdit(req, res, ids) {
   if (req.user.role === "admin") return false;
   const lockedRecord = await findPcLockedRecord(ids);
   if (!lockedRecord) return false;
-  res.status(403).json({ error: pcLockedMessage(lockedRecord) });
+  res.status(403).json({ error: await pcLockedMessage(lockedRecord) });
   return true;
 }
 
-function preventLoadedRecordEdit(req, res, existingRecord, payload) {
+async function preventLoadedRecordEdit(req, res, existingRecord, payload) {
   if (req.user.role === "admin" || !existingRecord || !hasOperationalLoad(existingRecord)) return false;
   if (isOnlyPcMark(existingRecord, payload)) return false;
   if (isAllowedSectorUpdate(req.user, existingRecord, payload)) return false;
-  res.status(403).json({ error: loadedRecordMessage(existingRecord) });
+  res.status(403).json({ error: await loadedRecordMessage(existingRecord) });
   return true;
 }
 
@@ -601,8 +612,8 @@ app.put("/api/records/:id", requireAuth, async (req, res) => {
     return res.json(toLiderRecord(data));
   }
   const payload = fromRecord({ ...req.body, id: req.params.id }, req.user.username, existing);
-  if (req.user.role !== "admin" && existing?.passed_pc) return res.status(403).json({ error: pcLockedMessage(existing) });
-  if (preventLoadedRecordEdit(req, res, existing, payload)) return;
+  if (req.user.role !== "admin" && existing?.passed_pc) return res.status(403).json({ error: await pcLockedMessage(existing) });
+  if (await preventLoadedRecordEdit(req, res, existing, payload)) return;
   const { data, error } = await supabase.from("records").upsert(payload).select("*").single();
   if (error) return res.status(400).json({ error: error.message });
   await writeAudit(req.user, "Actualizo registro", `CI ${payload.document_number}`);
@@ -675,7 +686,7 @@ app.post("/api/records/bulk", requireAuth, async (req, res) => {
     if (votedLockedRecord) return res.status(403).json({ error: votedLockedMessage(votedLockedRecord) });
 
     const pcLockedRecord = payload.map((record) => existingById.get(record.id)).find((record) => record?.passed_pc);
-    if (pcLockedRecord) return res.status(403).json({ error: pcLockedMessage(pcLockedRecord) });
+    if (pcLockedRecord) return res.status(403).json({ error: await pcLockedMessage(pcLockedRecord) });
 
     const loadedRecord = payload.find((record) => {
       const existingRecord = existingById.get(record.id);
@@ -684,7 +695,7 @@ app.post("/api/records/bulk", requireAuth, async (req, res) => {
         && !isOnlyPcMark(existingRecord, record)
         && !isAllowedSectorUpdate(req.user, existingRecord, record);
     });
-    if (loadedRecord) return res.status(403).json({ error: loadedRecordMessage(existingById.get(loadedRecord.id)) });
+    if (loadedRecord) return res.status(403).json({ error: await loadedRecordMessage(existingById.get(loadedRecord.id)) });
   }
   const { error } = await supabase.from("records").upsert(payload);
   if (error) return res.status(400).json({ error: error.message });
