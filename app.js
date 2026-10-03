@@ -475,7 +475,7 @@ function publicUpdatedBy(username) {
 function pcSectorLabel(record) {
   if (record.benefitType === "devolucion") return " Devolucion de Pasaje.";
   if (record.benefitType === "movil") return " Movil.";
-  if (record.benefitType === "movil_devolucion") return " Movil y Devolucion de Pasaje.";
+  if (record.benefitType === "movil_devolucion") return " Devolucion de Pasaje y Movil.";
   return "";
 }
 
@@ -820,7 +820,7 @@ function benefitLabel(type) {
     pago: "Incentivo",
     devolucion: "Devolucion",
     movil: "Movil",
-    movil_devolucion: "Movil y Devolucion",
+    movil_devolucion: "Devolucion y Movil",
   }[type] || type;
 }
 
