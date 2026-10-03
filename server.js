@@ -272,6 +272,10 @@ function pcLockedMessage(record) {
   return `Esta cedula ya pasó por PC. Barrio/compañia: ${record.neighborhood || "Sin dato"}.${pcSectorLabel(record)} Usuario: ${record.pc_marked_by || "Sin dato"}`;
 }
 
+function votedLockedMessage(record) {
+  return `Esta cedula ya fue marcada como VOTO. Barrio/compañia: ${record.neighborhood || "Sin dato"}. Solo ADMIN puede editarla.`;
+}
+
 function loadedRecordMessage(record) {
   return `Esta cedula ya fue cargada previamente. Zona: ${record.neighborhood || "Sin dato"}. Usuario: ${publicUpdatedBy(record.updated_by) || "Sin dato"}`;
 }
@@ -371,6 +375,27 @@ async function findPcLockedRecord(ids) {
     .limit(1);
   if (error) throw error;
   return data?.[0] || null;
+}
+
+async function findVotedLockedRecord(ids) {
+  const cleanIds = ids.map((id) => String(id)).filter(Boolean);
+  if (!cleanIds.length) return null;
+  const { data, error } = await supabase
+    .from("records")
+    .select("id, voted, neighborhood")
+    .in("id", cleanIds)
+    .eq("voted", true)
+    .limit(1);
+  if (error) throw error;
+  return data?.[0] || null;
+}
+
+async function preventVotedLockedEdit(req, res, ids) {
+  if (req.user.role === "admin") return false;
+  const lockedRecord = await findVotedLockedRecord(ids);
+  if (!lockedRecord) return false;
+  res.status(403).json({ error: votedLockedMessage(lockedRecord) });
+  return true;
 }
 
 async function preventPcLockedEdit(req, res, ids) {
@@ -487,6 +512,31 @@ app.post("/api/users", requireAuth, requireAdmin, async (req, res) => {
   res.status(201).json(publicUser(data));
 });
 
+app.put("/api/users/:username", requireAuth, requireAdmin, async (req, res) => {
+  const role = String(req.body.functionName || "").toLowerCase() === "admin" ? "admin" : "operator";
+  const payload = {
+    first_name: String(req.body.firstName || "").trim(),
+    last_name: String(req.body.lastName || "").trim(),
+    username: String(req.body.username || "").trim(),
+    password: String(req.body.password || ""),
+    function_name: String(req.body.functionName || "").trim(),
+    function_description: String(req.body.functionDescription || "").trim(),
+    role,
+  };
+  if (!payload.first_name || !payload.last_name || !payload.username || !payload.password || !payload.function_name || !payload.function_description) {
+    return res.status(400).json({ error: "Complete todos los campos." });
+  }
+  const { data, error } = await supabase
+    .from("app_users")
+    .update(payload)
+    .eq("username", req.params.username)
+    .select("*")
+    .single();
+  if (error) return res.status(400).json({ error: error.message });
+  await writeAudit(req.user, "Actualizo usuario", `${req.params.username} -> ${payload.username} - ${payload.function_name} - ${payload.function_description}`);
+  res.json(publicUser(data));
+});
+
 app.delete("/api/users/:username", requireAuth, requireAdmin, async (req, res) => {
   if (req.params.username === "admin") return res.status(400).json({ error: "No se puede eliminar el admin principal" });
   const { error } = await supabase.from("app_users").delete().eq("username", req.params.username);
@@ -528,6 +578,9 @@ app.get("/api/records", requireAuth, async (req, res) => {
 
 app.put("/api/records/:id", requireAuth, async (req, res) => {
   if (isWatcher(req.user)) return res.status(403).json({ error: "Los veedores solo pueden marcar VOTO/NO VOTO" });
+  const { data: existing, error: existingError } = await supabase.from("records").select("*").eq("id", req.params.id).maybeSingle();
+  if (existingError) return res.status(400).json({ error: existingError.message });
+  if (req.user.role !== "admin" && existing?.voted) return res.status(403).json({ error: votedLockedMessage(existing) });
   if (isConcejaliaLider(req.user)) {
     const { data, error } = await supabase
       .from("records")
@@ -547,8 +600,6 @@ app.put("/api/records/:id", requireAuth, async (req, res) => {
     await writeAudit(req.user, "Marco estado Lider", `CI ${data.document_number}`);
     return res.json(toLiderRecord(data));
   }
-  const { data: existing, error: existingError } = await supabase.from("records").select("*").eq("id", req.params.id).maybeSingle();
-  if (existingError) return res.status(400).json({ error: existingError.message });
   const payload = fromRecord({ ...req.body, id: req.params.id }, req.user.username, existing);
   if (req.user.role !== "admin" && existing?.passed_pc) return res.status(403).json({ error: pcLockedMessage(existing) });
   if (preventLoadedRecordEdit(req, res, existing, payload)) return;
@@ -570,6 +621,9 @@ app.post("/api/records/bulk", requireAuth, async (req, res) => {
       return res.status(403).json({ error: "El veedor solo puede marcar su local y mesa asignados" });
     }
 
+    const votedLockedRecord = data.find((record) => ids.includes(String(record.id)) && record.voted);
+    if (votedLockedRecord) return res.status(403).json({ error: votedLockedMessage(votedLockedRecord) });
+
     const incomingById = new Map(records.map((record) => [String(record.id), Boolean(record.voted)]));
     for (const id of ids) {
       const { data: updatedRows, error } = await supabase
@@ -585,6 +639,7 @@ app.post("/api/records/bulk", requireAuth, async (req, res) => {
   }
 
   try {
+    if (await preventVotedLockedEdit(req, res, ids)) return;
     if (await preventPcLockedEdit(req, res, ids)) return;
   } catch (error) {
     return res.status(400).json({ error: error.message });
@@ -616,6 +671,9 @@ app.post("/api/records/bulk", requireAuth, async (req, res) => {
   const existingById = new Map((existingRows || []).map((record) => [record.id, record]));
   const payload = records.map((record) => fromRecord(record, req.user.username, existingById.get(String(record.id))));
   if (req.user.role !== "admin") {
+    const votedLockedRecord = payload.map((record) => existingById.get(record.id)).find((record) => record?.voted);
+    if (votedLockedRecord) return res.status(403).json({ error: votedLockedMessage(votedLockedRecord) });
+
     const pcLockedRecord = payload.map((record) => existingById.get(record.id)).find((record) => record?.passed_pc);
     if (pcLockedRecord) return res.status(403).json({ error: pcLockedMessage(pcLockedRecord) });
 

@@ -46,6 +46,8 @@ const watcherPollingPlaceLabel = document.querySelector("#watcherPollingPlaceLab
 const watcherTableNumberLabel = document.querySelector("#watcherTableNumberLabel");
 const newWatcherPollingPlace = document.querySelector("#newWatcherPollingPlace");
 const newWatcherTableNumber = document.querySelector("#newWatcherTableNumber");
+const saveUserButton = document.querySelector("#saveUserButton");
+const cancelUserEdit = document.querySelector("#cancelUserEdit");
 const userMessage = document.querySelector("#userMessage");
 const usersList = document.querySelector("#usersList");
 const logoutButton = document.querySelector("#logoutButton");
@@ -136,6 +138,7 @@ let currentUser = loadSession();
 let authToken = "";
 let selectedRecords = new Set();
 let currentView = "operations";
+let editingUsername = "";
 let bulkEditorOpen = false;
 let selectedSummary = "";
 let selectedNeighborhoodSummary = "";
@@ -479,9 +482,18 @@ function pcLockedMessage(record) {
   return `Esta cedula ya pasó por PC. Barrio/compañia: ${record.neighborhood || "Sin dato"}.${pcSectorLabel(record)} Usuario: ${record.pcMarkedBy || "Sin dato"}`;
 }
 
+function votedLockedMessage(record) {
+  return `Esta cedula ya fue marcada como VOTO. Barrio/compañia: ${record.neighborhood || "Sin dato"}. Solo ADMIN puede editarla.`;
+}
+
 function lockedSelectedPcRecord() {
   if (isAdmin()) return null;
   return records.find((record) => selectedRecords.has(record.id) && record.passedPc) || null;
+}
+
+function lockedSelectedVotedRecord() {
+  if (isAdmin()) return null;
+  return records.find((record) => selectedRecords.has(record.id) && record.voted) || null;
 }
 
 function loadedRecordMessage(record) {
@@ -518,18 +530,24 @@ function hasBulkNonPcChanges() {
 }
 
 function updateBulkEditorForSelection() {
+  const votedRecord = lockedSelectedVotedRecord();
   const loadedRecord = lockedSelectedLoadedRecord();
   const sectorType = currentSectorEditType();
-  const sectorEditMode = Boolean(loadedRecord && sectorType && loadedRecord.benefitType === sectorType);
-  const pcOnlyMode = Boolean(loadedRecord && !loadedRecord.passedPc);
+  const sectorEditMode = Boolean(!votedRecord && loadedRecord && sectorType && loadedRecord.benefitType === sectorType);
+  const pcOnlyMode = Boolean(!votedRecord && loadedRecord && !loadedRecord.passedPc);
   Object.entries(bulkFields).forEach(([field, control]) => {
     const allowedSectorField = field === "amount" || field === "passedPc" || (sectorType === "movil" && field === "mobileType");
-    control.closest("label").hidden = sectorEditMode ? !allowedSectorField : pcOnlyMode && field !== "passedPc";
+    control.closest("label").hidden = votedRecord || (sectorEditMode ? !allowedSectorField : pcOnlyMode && field !== "passedPc");
   });
-  document.querySelector("#clearBulkFields").hidden = pcOnlyMode || sectorEditMode;
+  document.querySelector("#clearBulkFields").hidden = Boolean(votedRecord) || pcOnlyMode || sectorEditMode;
   requestSectorRemovalButton.hidden = !sectorEditMode;
   const noPcOption = bulkFields.passedPc.querySelector('option[value="no"]');
   if (noPcOption) noPcOption.hidden = pcOnlyMode;
+  if (votedRecord) {
+    requestSectorRemovalButton.hidden = true;
+    editModeHint.textContent = votedLockedMessage(votedRecord);
+    return true;
+  }
   if (sectorEditMode) {
     editModeHint.textContent = sectorType === "movil"
       ? "Edicion de Moviles: cargue monto, movil completo/parcial y Paso por PC. Para quitar el tipo, avise al admin."
@@ -1185,9 +1203,44 @@ function renderUsersList() {
         <span>Funcion: ${escapeHtml(user.functionName || "Sin funcion asignada")}</span>
         <span>Descripcion: ${escapeHtml(user.functionDescription || "Sin descripcion")}</span>
       </div>
-      <button class="row-button delete" type="button" data-delete-user="${escapeHtml(user.username)}">Eliminar</button>
+      <div class="actions">
+        <button class="row-button" type="button" data-edit-user="${escapeHtml(user.username)}">Editar</button>
+        <button class="row-button delete" type="button" data-delete-user="${escapeHtml(user.username)}">Eliminar</button>
+      </div>
     </div>
   `).join("") : `<p class="hint">Todavia no hay operadores creados.</p>`;
+}
+
+function resetUserForm() {
+  editingUsername = "";
+  userForm.reset();
+  newUsername.disabled = false;
+  saveUserButton.textContent = "Crear usuario";
+  cancelUserEdit.hidden = true;
+  updateWatcherFields();
+}
+
+function fillUserForm(user) {
+  editingUsername = user.username;
+  newFirstName.value = user.firstName || "";
+  newLastName.value = user.lastName || "";
+  newUsername.value = user.username || "";
+  newUsername.disabled = false;
+  newPassword.value = user.password || "";
+  newFunction.value = user.functionName || "";
+  newFunctionDescription.value = user.functionDescription || "";
+  updateWatcherFields();
+  if (isWatcher(user)) {
+    const match = String(user.functionDescription || "").match(/local\s*:\s*(.*?)\s*\|\s*mesa\s*:\s*(.+)$/i);
+    if (match) {
+      newWatcherPollingPlace.value = match[1].trim();
+      renderWatcherTableOptions();
+      newWatcherTableNumber.value = match[2].trim();
+    }
+  }
+  saveUserButton.textContent = "Guardar cambios";
+  cancelUserEdit.hidden = false;
+  userForm.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 async function login(username, password) {
@@ -1237,6 +1290,34 @@ async function createOperator(firstName, lastName, username, password, functionN
   }));
   renderUsersList();
   return "Usuario creado correctamente.";
+}
+
+async function updateOperator(firstName, lastName, username, password, functionName, functionDescription) {
+  const cleanFirstName = normalize(firstName);
+  const cleanLastName = normalize(lastName);
+  const cleanUsername = normalize(username);
+  const cleanFunctionName = normalize(functionName);
+  let cleanFunctionDescription = normalize(functionDescription);
+  if (normalizeKey(cleanFunctionName).includes("veedor")) {
+    const pollingPlace = normalize(newWatcherPollingPlace.value);
+    const tableNumber = normalize(newWatcherTableNumber.value);
+    if (!pollingPlace || !tableNumber) return "Complete el local de votacion y la mesa del veedor.";
+    cleanFunctionDescription = watcherDescription(pollingPlace, tableNumber);
+  }
+  if (!editingUsername || !cleanFirstName || !cleanLastName || !cleanUsername || !password || !cleanFunctionName || !cleanFunctionDescription) return "Complete todos los campos.";
+  if (users.some((user) => user.username.toLowerCase() === cleanUsername.toLowerCase() && user.username !== editingUsername)) {
+    return "Ese usuario ya existe.";
+  }
+
+  const updatedUser = await apiRequest(`/api/users/${encodeURIComponent(editingUsername)}`, {
+    method: "PUT",
+    body: JSON.stringify({ firstName: cleanFirstName, lastName: cleanLastName, username: cleanUsername, password, functionName: cleanFunctionName, functionDescription: cleanFunctionDescription }),
+  });
+  users = users.map((user) => user.username === editingUsername ? updatedUser : user);
+  if (currentUser?.username === editingUsername || currentUser?.username === updatedUser.username) saveSession(updatedUser);
+  renderUsersList();
+  resetUserForm();
+  return "Usuario actualizado correctamente.";
 }
 
 function renderTable() {
@@ -1763,6 +1844,7 @@ function chartLegendItem(label, count, percent, className) {
 
 function operationsRow(record) {
   if (isWatcher()) return watcherRow(record);
+  const nonAdminVoted = !isAdmin() && record.voted;
 
   return `
     <td class="name-cell">${escapeHtml(fixNameText(record.firstNames || record.fullName || ""))}</td>
@@ -1780,14 +1862,15 @@ function operationsRow(record) {
     <td>${money(effectiveAmount(record))}</td>
     <td><span class="pill ${record.passedPc ? "pc-yes" : "pc-no"}">${record.passedPc ? "Si" : "No"}</span></td>
     <td class="actions">
-      <button class="row-button vote-toggle ${record.voted ? "voted" : "not-voted"}" data-action="toggle-voted" data-id="${record.id}" type="button">${record.voted ? "VOTO" : "NO VOTO"}</button>
-      <button class="row-button" data-action="edit" data-id="${record.id}" type="button">Editar</button>
+      <button class="row-button vote-toggle ${record.voted ? "voted" : "not-voted"}" data-action="toggle-voted" data-id="${record.id}" type="button" ${nonAdminVoted ? "disabled" : ""}>${record.voted ? "VOTO" : "NO VOTO"}</button>
+      <button class="row-button" data-action="edit" data-id="${record.id}" type="button" ${nonAdminVoted ? "disabled" : ""}>Editar</button>
     </td>
   `;
 }
 
 function watcherRow(record) {
   const fullName = [fixNameText(record.lastNames), fixNameText(record.firstNames || record.fullName || "")].filter(Boolean).join(" ");
+  const nonAdminVoted = !isAdmin() && record.voted;
   return `
     <td class="document-cell">${escapeHtml(record.documentNumber)}</td>
     <td class="name-cell">${escapeHtml(fullName)}</td>
@@ -1796,12 +1879,13 @@ function watcherRow(record) {
     <td>${escapeHtml(record.tableNumber)}</td>
     <td>${escapeHtml(record.orderNumber)}</td>
     <td class="actions">
-      <button class="row-button vote-toggle ${record.voted ? "voted" : "not-voted"}" data-action="toggle-voted" data-id="${record.id}" type="button">${record.voted ? "VOTO" : "NO VOTO"}</button>
+      <button class="row-button vote-toggle ${record.voted ? "voted" : "not-voted"}" data-action="toggle-voted" data-id="${record.id}" type="button" ${nonAdminVoted ? "disabled" : ""}>${record.voted ? "VOTO" : "NO VOTO"}</button>
     </td>
   `;
 }
 
 function mobileRow(record) {
+  const nonAdminVoted = !isAdmin() && record.voted;
   return `
     <td>${escapeHtml(fixNameText(record.firstNames || record.fullName || ""))}</td>
     <td>${escapeHtml(fixNameText(record.lastNames))}</td>
@@ -1814,12 +1898,13 @@ function mobileRow(record) {
     <td><span class="pill status-${statusValue(record.status)}">${statusLabel(record.status)}</span></td>
     <td><span class="pill ${record.passedPc ? "pc-yes" : "pc-no"}">${record.passedPc ? "Si" : "No"}</span></td>
     <td class="actions">
-      <button class="row-button" data-action="edit" data-id="${record.id}" type="button">Editar</button>
+      <button class="row-button" data-action="edit" data-id="${record.id}" type="button" ${nonAdminVoted ? "disabled" : ""}>Editar</button>
     </td>
   `;
 }
 
 function refundRow(record) {
+  const nonAdminVoted = !isAdmin() && record.voted;
   return `
     <td>${escapeHtml(fixNameText(record.firstNames || record.fullName || ""))}</td>
     <td>${escapeHtml(fixNameText(record.lastNames))}</td>
@@ -1833,7 +1918,7 @@ function refundRow(record) {
     <td><span class="pill status-${statusValue(record.status)}">${statusLabel(record.status)}</span></td>
     <td><span class="pill ${record.passedPc ? "pc-yes" : "pc-no"}">${record.passedPc ? "Si" : "No"}</span></td>
     <td class="actions">
-      <button class="row-button" data-action="edit" data-id="${record.id}" type="button">Editar</button>
+      <button class="row-button" data-action="edit" data-id="${record.id}" type="button" ${nonAdminVoted ? "disabled" : ""}>Editar</button>
     </td>
   `;
 }
@@ -1855,12 +1940,20 @@ recordsBody.addEventListener("click", (event) => {
   if (!record) return;
 
   if (button.dataset.action === "toggle-voted") {
+    if (!isAdmin() && record.voted) {
+      showSystemAlert(votedLockedMessage(record));
+      return;
+    }
     toggleVoted(record);
     return;
   }
 
   if (button.dataset.action === "edit") {
     if (isWatcher()) return;
+    if (!isAdmin() && record.voted) {
+      showSystemAlert(votedLockedMessage(record));
+      return;
+    }
     if (!isAdmin() && record.passedPc) {
       showSystemAlert(pcLockedMessage(record));
       return;
@@ -1920,6 +2013,11 @@ async function applyBulkChanges() {
   const selected = records.filter((record) => selectedRecords.has(record.id));
   if (!ids.length) {
     showSystemAlert("Seleccione al menos un registro.");
+    return;
+  }
+  const votedRecord = lockedSelectedVotedRecord();
+  if (votedRecord) {
+    showSystemAlert(votedLockedMessage(votedRecord));
     return;
   }
   const lockedRecord = lockedSelectedPcRecord();
@@ -1985,6 +2083,11 @@ async function clearSelectedFields() {
   const ids = Array.from(selectedRecords);
   if (!ids.length) {
     showSystemAlert("Seleccione al menos un registro.");
+    return;
+  }
+  const votedRecord = lockedSelectedVotedRecord();
+  if (votedRecord) {
+    showSystemAlert(votedLockedMessage(votedRecord));
     return;
   }
   const lockedRecord = lockedSelectedPcRecord();
@@ -2130,13 +2233,14 @@ loginForm.addEventListener("submit", async (event) => {
 userForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
-    userMessage.textContent = await createOperator(newFirstName.value, newLastName.value, newUsername.value, newPassword.value, newFunction.value, newFunctionDescription.value);
+    userMessage.textContent = editingUsername
+      ? await updateOperator(newFirstName.value, newLastName.value, newUsername.value, newPassword.value, newFunction.value, newFunctionDescription.value)
+      : await createOperator(newFirstName.value, newLastName.value, newUsername.value, newPassword.value, newFunction.value, newFunctionDescription.value);
   } catch (error) {
     userMessage.textContent = error.message;
   }
   userMessage.hidden = false;
-  userForm.reset();
-  updateWatcherFields();
+  if (!editingUsername) resetUserForm();
 });
 function updateWatcherFields() {
   const watcherSelected = normalizeKey(newFunction.value).includes("veedor");
@@ -2162,16 +2266,25 @@ document.addEventListener("keydown", (event) => {
   closeSystemModal(systemModalConfirmMode ? false : true);
 });
 usersList.addEventListener("click", async (event) => {
+  const editButton = event.target.closest("[data-edit-user]");
+  if (editButton) {
+    const user = users.find((item) => item.username === editButton.dataset.editUser);
+    if (user) fillUserForm(user);
+    return;
+  }
+
   const button = event.target.closest("[data-delete-user]");
   if (!button) return;
   try {
     await apiRequest(`/api/users/${encodeURIComponent(button.dataset.deleteUser)}`, { method: "DELETE" });
     users = users.filter((user) => user.username !== button.dataset.deleteUser);
+    if (editingUsername === button.dataset.deleteUser) resetUserForm();
   } catch (error) {
     showSystemAlert(error.message);
   }
   renderUsersList();
 });
+cancelUserEdit.addEventListener("click", resetUserForm);
 logoutButton.addEventListener("click", async () => {
   if (authToken) {
     await apiRequest("/api/auth/logout", { method: "POST" }).catch(() => {});
