@@ -1021,8 +1021,6 @@ function generateNeighborhoodPdf() {
       <td>${escapeHtml(fixNameText(record.lastNames))}</td>
       <td>${escapeHtml(fixNameText(record.firstNames || record.fullName || ""))}</td>
       <td>${escapeHtml(record.documentNumber)}</td>
-      <td>${escapeHtml(record.pollingPlace)}</td>
-      <td>${escapeHtml(record.tableNumber)}</td>
       <td>${escapeHtml(record.orderNumber)}</td>
       <td>${escapeHtml(record.blockNumber)}</td>
       <td>${escapeHtml(statusLabel(record.status))}</td>
@@ -1060,8 +1058,6 @@ function generateNeighborhoodPdf() {
               <th>Apellidos</th>
               <th>Nombres</th>
               <th>Cedula</th>
-              <th>Local</th>
-              <th>Mesa</th>
               <th>Orden</th>
               <th>Manzana</th>
               <th>Estado</th>
@@ -1069,7 +1065,7 @@ function generateNeighborhoodPdf() {
               <th>Detalle</th>
             </tr>
           </thead>
-          <tbody>${rows || `<tr><td colspan="10">No hay registros para este barrio/compañia.</td></tr>`}</tbody>
+          <tbody>${rows || `<tr><td colspan="8">No hay registros para este barrio/compañia.</td></tr>`}</tbody>
         </table>
       </body>
     </html>
@@ -1088,8 +1084,6 @@ function generateBenefitPdf(type, title) {
       <td>${escapeHtml(fixNameText(record.lastNames))}</td>
       <td>${escapeHtml(fixNameText(record.firstNames || record.fullName || ""))}</td>
       <td>${escapeHtml(record.documentNumber)}</td>
-      <td>${escapeHtml(record.pollingPlace)}</td>
-      <td>${escapeHtml(record.tableNumber)}</td>
       <td>${escapeHtml(record.orderNumber)}</td>
       <td>${escapeHtml(record.neighborhood)}</td>
       <td>${escapeHtml(record.blockNumber)}</td>
@@ -1129,8 +1123,6 @@ function generateBenefitPdf(type, title) {
               <th>Apellidos</th>
               <th>Nombres</th>
               <th>Cedula</th>
-              <th>Local</th>
-              <th>Mesa</th>
               <th>Orden</th>
               <th>Barrio/compañia</th>
               <th>Manzana</th>
@@ -1140,7 +1132,7 @@ function generateBenefitPdf(type, title) {
               <th>Monto</th>
             </tr>
           </thead>
-          <tbody>${rows || `<tr><td colspan="12">No hay registros para este reporte.</td></tr>`}</tbody>
+          <tbody>${rows || `<tr><td colspan="10">No hay registros para este reporte.</td></tr>`}</tbody>
         </table>
       </body>
     </html>
@@ -1544,8 +1536,6 @@ function generateLiderVotesPdf() {
       <td>${escapeHtml(fixNameText(record.lastNames))}</td>
       <td>${escapeHtml(fixNameText(record.firstNames || record.fullName || ""))}</td>
       <td>${escapeHtml(record.documentNumber)}</td>
-      <td>${escapeHtml(record.pollingPlace)}</td>
-      <td>${escapeHtml(record.tableNumber)}</td>
       <td>${escapeHtml(record.orderNumber)}</td>
       <td>${escapeHtml(record.neighborhood)}</td>
     </tr>
@@ -1587,13 +1577,11 @@ function generateLiderVotesPdf() {
               <th>Apellidos</th>
               <th>Nombres</th>
               <th>Cedula</th>
-              <th>Local</th>
-              <th>Mesa</th>
               <th>Orden</th>
               <th>Barrio/compania</th>
             </tr>
           </thead>
-          <tbody>${rows || `<tr><td colspan="8">No hay registros POSITIVOS o DUDOSOS para Lider.</td></tr>`}</tbody>
+          <tbody>${rows || `<tr><td colspan="6">No hay registros POSITIVOS o DUDOSOS para Lider.</td></tr>`}</tbody>
         </table>
       </body>
     </html>
@@ -1676,8 +1664,6 @@ function generatePcReportPdf() {
       <td>${escapeHtml(fixNameText(record.lastNames))}</td>
       <td>${escapeHtml(fixNameText(record.firstNames || record.fullName || ""))}</td>
       <td>${escapeHtml(record.documentNumber)}</td>
-      <td>${escapeHtml(record.pollingPlace)}</td>
-      <td>${escapeHtml(record.tableNumber)}</td>
       <td>${escapeHtml(record.orderNumber)}</td>
       <td>${escapeHtml(record.neighborhood)}</td>
       <td>${escapeHtml(record.blockNumber)}</td>
@@ -1717,8 +1703,6 @@ function generatePcReportPdf() {
               <th>Apellidos</th>
               <th>Nombres</th>
               <th>Cedula</th>
-              <th>Local</th>
-              <th>Mesa</th>
               <th>Orden</th>
               <th>Barrio/compania</th>
               <th>Manzana</th>
@@ -1728,7 +1712,7 @@ function generatePcReportPdf() {
               <th>Marcado por</th>
             </tr>
           </thead>
-          <tbody>${rows || `<tr><td colspan="12">No hay registros marcados como Paso por PC.</td></tr>`}</tbody>
+          <tbody>${rows || `<tr><td colspan="10">No hay registros marcados como Paso por PC.</td></tr>`}</tbody>
         </table>
       </body>
     </html>
