@@ -491,17 +491,12 @@ function pcLockedMessage(record) {
 }
 
 function votedLockedMessage(record) {
-  return `Esta cedula ya fue marcada como VOTO. Zona: ${record.neighborhood || "Sin dato"}. Solo ADMIN puede editarla.`;
+  return `Esta cedula ya fue marcada como VOTO. Zona: ${record.neighborhood || "Sin dato"}. Solo ADMIN puede desmarcarla.`;
 }
 
 function lockedSelectedPcRecord() {
   if (isAdmin()) return null;
   return records.find((record) => selectedRecords.has(record.id) && record.passedPc) || null;
-}
-
-function lockedSelectedVotedRecord() {
-  if (isAdmin()) return null;
-  return records.find((record) => selectedRecords.has(record.id) && record.voted) || null;
 }
 
 function loadedRecordMessage(record) {
@@ -538,24 +533,18 @@ function hasBulkNonPcChanges() {
 }
 
 function updateBulkEditorForSelection() {
-  const votedRecord = lockedSelectedVotedRecord();
   const loadedRecord = lockedSelectedLoadedRecord();
   const sectorType = currentSectorEditType();
-  const sectorEditMode = Boolean(!votedRecord && loadedRecord && sectorType && benefitMatchesType(loadedRecord.benefitType, sectorType));
-  const pcOnlyMode = Boolean(!votedRecord && loadedRecord && !loadedRecord.passedPc);
+  const sectorEditMode = Boolean(loadedRecord && sectorType && benefitMatchesType(loadedRecord.benefitType, sectorType));
+  const pcOnlyMode = Boolean(loadedRecord && !loadedRecord.passedPc);
   Object.entries(bulkFields).forEach(([field, control]) => {
     const allowedSectorField = field === "amount" || field === "passedPc" || (sectorType === "movil" && field === "mobileType");
-    control.closest("label").hidden = votedRecord || (sectorEditMode ? !allowedSectorField : pcOnlyMode && field !== "passedPc");
+    control.closest("label").hidden = sectorEditMode ? !allowedSectorField : pcOnlyMode && field !== "passedPc";
   });
-  document.querySelector("#clearBulkFields").hidden = Boolean(votedRecord) || pcOnlyMode || sectorEditMode;
+  document.querySelector("#clearBulkFields").hidden = pcOnlyMode || sectorEditMode;
   requestSectorRemovalButton.hidden = !sectorEditMode;
   const noPcOption = bulkFields.passedPc.querySelector('option[value="no"]');
   if (noPcOption) noPcOption.hidden = pcOnlyMode;
-  if (votedRecord) {
-    requestSectorRemovalButton.hidden = true;
-    editModeHint.textContent = votedLockedMessage(votedRecord);
-    return true;
-  }
   if (sectorEditMode) {
     editModeHint.textContent = sectorType === "movil"
       ? "Edicion de Moviles: cargue monto, movil completo/parcial y Paso por PC. Para quitar el tipo, avise al admin."
@@ -1863,7 +1852,7 @@ function chartLegendItem(label, count, percent, className) {
 
 function operationsRow(record) {
   if (isWatcher()) return watcherRow(record);
-  const nonAdminVoted = !isAdmin() && record.voted;
+  const voteToggleDisabled = !isAdmin() && record.voted;
 
   return `
     <td class="name-cell">${escapeHtml(fixNameText(record.firstNames || record.fullName || ""))}</td>
@@ -1881,15 +1870,15 @@ function operationsRow(record) {
     <td>${money(effectiveAmount(record))}</td>
     <td><span class="pill ${record.passedPc ? "pc-yes" : "pc-no"}">${record.passedPc ? "Si" : "No"}</span></td>
     <td class="actions">
-      <button class="row-button vote-toggle ${record.voted ? "voted" : "not-voted"}" data-action="toggle-voted" data-id="${record.id}" type="button" ${nonAdminVoted ? "disabled" : ""}>${record.voted ? "VOTO" : "NO VOTO"}</button>
-      <button class="row-button" data-action="edit" data-id="${record.id}" type="button" ${nonAdminVoted ? "disabled" : ""}>Editar</button>
+      <button class="row-button vote-toggle ${record.voted ? "voted" : "not-voted"}" data-action="toggle-voted" data-id="${record.id}" type="button" ${voteToggleDisabled ? "disabled" : ""}>${record.voted ? "VOTO" : "NO VOTO"}</button>
+      <button class="row-button" data-action="edit" data-id="${record.id}" type="button">Editar</button>
     </td>
   `;
 }
 
 function watcherRow(record) {
   const fullName = [fixNameText(record.lastNames), fixNameText(record.firstNames || record.fullName || "")].filter(Boolean).join(" ");
-  const nonAdminVoted = !isAdmin() && record.voted;
+  const voteToggleDisabled = !isAdmin() && record.voted;
   return `
     <td class="document-cell">${escapeHtml(record.documentNumber)}</td>
     <td class="name-cell">${escapeHtml(fullName)}</td>
@@ -1898,13 +1887,12 @@ function watcherRow(record) {
     <td>${escapeHtml(record.tableNumber)}</td>
     <td>${escapeHtml(record.orderNumber)}</td>
     <td class="actions">
-      <button class="row-button vote-toggle ${record.voted ? "voted" : "not-voted"}" data-action="toggle-voted" data-id="${record.id}" type="button" ${nonAdminVoted ? "disabled" : ""}>${record.voted ? "VOTO" : "NO VOTO"}</button>
+      <button class="row-button vote-toggle ${record.voted ? "voted" : "not-voted"}" data-action="toggle-voted" data-id="${record.id}" type="button" ${voteToggleDisabled ? "disabled" : ""}>${record.voted ? "VOTO" : "NO VOTO"}</button>
     </td>
   `;
 }
 
 function mobileRow(record) {
-  const nonAdminVoted = !isAdmin() && record.voted;
   return `
     <td>${escapeHtml(fixNameText(record.firstNames || record.fullName || ""))}</td>
     <td>${escapeHtml(fixNameText(record.lastNames))}</td>
@@ -1917,13 +1905,12 @@ function mobileRow(record) {
     <td><span class="pill status-${statusValue(record.status)}">${statusLabel(record.status)}</span></td>
     <td><span class="pill ${record.passedPc ? "pc-yes" : "pc-no"}">${record.passedPc ? "Si" : "No"}</span></td>
     <td class="actions">
-      <button class="row-button" data-action="edit" data-id="${record.id}" type="button" ${nonAdminVoted ? "disabled" : ""}>Editar</button>
+      <button class="row-button" data-action="edit" data-id="${record.id}" type="button">Editar</button>
     </td>
   `;
 }
 
 function refundRow(record) {
-  const nonAdminVoted = !isAdmin() && record.voted;
   return `
     <td>${escapeHtml(fixNameText(record.firstNames || record.fullName || ""))}</td>
     <td>${escapeHtml(fixNameText(record.lastNames))}</td>
@@ -1937,7 +1924,7 @@ function refundRow(record) {
     <td><span class="pill status-${statusValue(record.status)}">${statusLabel(record.status)}</span></td>
     <td><span class="pill ${record.passedPc ? "pc-yes" : "pc-no"}">${record.passedPc ? "Si" : "No"}</span></td>
     <td class="actions">
-      <button class="row-button" data-action="edit" data-id="${record.id}" type="button" ${nonAdminVoted ? "disabled" : ""}>Editar</button>
+      <button class="row-button" data-action="edit" data-id="${record.id}" type="button">Editar</button>
     </td>
   `;
 }
@@ -1969,10 +1956,6 @@ recordsBody.addEventListener("click", (event) => {
 
   if (button.dataset.action === "edit") {
     if (isWatcher()) return;
-    if (!isAdmin() && record.voted) {
-      showSystemAlert(votedLockedMessage(record));
-      return;
-    }
     if (!isAdmin() && record.passedPc) {
       showSystemAlert(pcLockedMessage(record));
       return;
@@ -2032,11 +2015,6 @@ async function applyBulkChanges() {
   const selected = records.filter((record) => selectedRecords.has(record.id));
   if (!ids.length) {
     showSystemAlert("Seleccione al menos un registro.");
-    return;
-  }
-  const votedRecord = lockedSelectedVotedRecord();
-  if (votedRecord) {
-    showSystemAlert(votedLockedMessage(votedRecord));
     return;
   }
   const lockedRecord = lockedSelectedPcRecord();
@@ -2102,11 +2080,6 @@ async function clearSelectedFields() {
   const ids = Array.from(selectedRecords);
   if (!ids.length) {
     showSystemAlert("Seleccione al menos un registro.");
-    return;
-  }
-  const votedRecord = lockedSelectedVotedRecord();
-  if (votedRecord) {
-    showSystemAlert(votedLockedMessage(votedRecord));
     return;
   }
   const lockedRecord = lockedSelectedPcRecord();

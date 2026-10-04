@@ -291,7 +291,7 @@ async function pcLockedMessage(record) {
 }
 
 function votedLockedMessage(record) {
-  return `Esta cedula ya fue marcada como VOTO. Zona: ${record.neighborhood || "Sin dato"}. Solo ADMIN puede editarla.`;
+  return `Esta cedula ya fue marcada como VOTO. Zona: ${record.neighborhood || "Sin dato"}. Solo ADMIN puede desmarcarla.`;
 }
 
 async function loadedRecordMessage(record) {
@@ -393,27 +393,6 @@ async function findPcLockedRecord(ids) {
     .limit(1);
   if (error) throw error;
   return data?.[0] || null;
-}
-
-async function findVotedLockedRecord(ids) {
-  const cleanIds = ids.map((id) => String(id)).filter(Boolean);
-  if (!cleanIds.length) return null;
-  const { data, error } = await supabase
-    .from("records")
-    .select("id, voted, neighborhood")
-    .in("id", cleanIds)
-    .eq("voted", true)
-    .limit(1);
-  if (error) throw error;
-  return data?.[0] || null;
-}
-
-async function preventVotedLockedEdit(req, res, ids) {
-  if (req.user.role === "admin") return false;
-  const lockedRecord = await findVotedLockedRecord(ids);
-  if (!lockedRecord) return false;
-  res.status(403).json({ error: votedLockedMessage(lockedRecord) });
-  return true;
 }
 
 async function preventPcLockedEdit(req, res, ids) {
@@ -598,7 +577,6 @@ app.put("/api/records/:id", requireAuth, async (req, res) => {
   if (isWatcher(req.user)) return res.status(403).json({ error: "Los veedores solo pueden marcar VOTO/NO VOTO" });
   const { data: existing, error: existingError } = await supabase.from("records").select("*").eq("id", req.params.id).maybeSingle();
   if (existingError) return res.status(400).json({ error: existingError.message });
-  if (req.user.role !== "admin" && existing?.voted) return res.status(403).json({ error: votedLockedMessage(existing) });
   if (isConcejaliaLider(req.user)) {
     const { data, error } = await supabase
       .from("records")
@@ -619,6 +597,7 @@ app.put("/api/records/:id", requireAuth, async (req, res) => {
     return res.json(toLiderRecord(data));
   }
   const payload = fromRecord({ ...req.body, id: req.params.id }, req.user.username, existing);
+  if (req.user.role !== "admin" && existing?.voted) payload.voted = true;
   if (req.user.role !== "admin" && existing?.passed_pc) return res.status(403).json({ error: await pcLockedMessage(existing) });
   if (await preventLoadedRecordEdit(req, res, existing, payload)) return;
   const { data, error } = await supabase.from("records").upsert(payload).select("*").single();
@@ -657,7 +636,6 @@ app.post("/api/records/bulk", requireAuth, async (req, res) => {
   }
 
   try {
-    if (await preventVotedLockedEdit(req, res, ids)) return;
     if (await preventPcLockedEdit(req, res, ids)) return;
   } catch (error) {
     return res.status(400).json({ error: error.message });
@@ -689,8 +667,9 @@ app.post("/api/records/bulk", requireAuth, async (req, res) => {
   const existingById = new Map((existingRows || []).map((record) => [record.id, record]));
   const payload = records.map((record) => fromRecord(record, req.user.username, existingById.get(String(record.id))));
   if (req.user.role !== "admin") {
-    const votedLockedRecord = payload.map((record) => existingById.get(record.id)).find((record) => record?.voted);
-    if (votedLockedRecord) return res.status(403).json({ error: votedLockedMessage(votedLockedRecord) });
+    payload.forEach((record) => {
+      if (existingById.get(record.id)?.voted) record.voted = true;
+    });
 
     const pcLockedRecord = payload.map((record) => existingById.get(record.id)).find((record) => record?.passed_pc);
     if (pcLockedRecord) return res.status(403).json({ error: await pcLockedMessage(pcLockedRecord) });
