@@ -111,6 +111,7 @@ function shouldApplyAutomaticIncentive(record) {
 function benefitMatchesType(benefitType, type) {
   if (!type) return true;
   if (benefitType === type) return true;
+  if (benefitType === "movil_pago" && ["movil", "pago"].includes(type)) return true;
   return benefitType === "movil_devolucion" && ["movil", "devolucion"].includes(type);
 }
 
@@ -272,6 +273,7 @@ function publicUpdatedBy(username) {
 function pcSectorLabel(record) {
   if (record.benefit_type === "devolucion") return " Devolucion de Pasaje.";
   if (record.benefit_type === "movil") return " Movil.";
+  if (record.benefit_type === "movil_pago") return " Movil e Incentivo.";
   if (record.benefit_type === "movil_devolucion") return " Devolucion de Pasaje y Movil.";
   return "";
 }

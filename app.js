@@ -731,7 +731,7 @@ function money(value) {
 }
 
 function effectiveAmount(record) {
-  return record.benefitType === "pago" ? 100000 : Number(record.amount || 0);
+  return ["pago", "movil_pago"].includes(record.benefitType) ? 100000 : Number(record.amount || 0);
 }
 
 function shouldApplyAutomaticIncentive(record) {
@@ -817,6 +817,7 @@ function benefitLabel(type) {
     pago: "Incentivo",
     devolucion: "Devolucion",
     movil: "Movil",
+    movil_pago: "Movil e Incentivo",
     movil_devolucion: "Devolucion y Movil",
   }[type] || type;
 }
@@ -824,6 +825,7 @@ function benefitLabel(type) {
 function benefitMatchesType(benefitType, type) {
   if (!type) return true;
   if (benefitType === type) return true;
+  if (benefitType === "movil_pago" && ["movil", "pago"].includes(type)) return true;
   return benefitType === "movil_devolucion" && ["movil", "devolucion"].includes(type);
 }
 
@@ -841,6 +843,7 @@ function statusLabel(status) {
 }
 
 function getDetail(record) {
+  if (record.benefitType === "movil_pago") return `Movil ${record.mobileType || "completo"} / Incentivo`;
   if (record.benefitType === "movil_devolucion") {
     const mobileDetail = `Movil ${record.mobileType || "completo"}`;
     return record.city ? `${mobileDetail} / Ciudad: ${record.city}` : mobileDetail;
@@ -921,7 +924,7 @@ function renderStats() {
   }, 0));
   document.querySelector("#mobileCount").textContent = records.filter((record) => benefitMatchesType(record.benefitType, "movil")).length;
   document.querySelector("#refundCount").textContent = records.filter((record) => benefitMatchesType(record.benefitType, "devolucion")).length;
-  document.querySelector("#paymentCount").textContent = records.filter((record) => record.benefitType === "pago").length;
+  document.querySelector("#paymentCount").textContent = records.filter((record) => benefitMatchesType(record.benefitType, "pago")).length;
   renderSummaryDetail();
   renderNeighborhoodSummary();
 }
@@ -934,7 +937,7 @@ function getSummaryRecords(type) {
     paid: records.filter((record) => record.passedPc && effectiveAmount(record) > 0),
     mobile: records.filter((record) => benefitMatchesType(record.benefitType, "movil")),
     refund: records.filter((record) => benefitMatchesType(record.benefitType, "devolucion")),
-    payment: records.filter((record) => record.benefitType === "pago"),
+    payment: records.filter((record) => benefitMatchesType(record.benefitType, "pago")),
   }[type] || [];
 }
 
@@ -1820,7 +1823,7 @@ function getUserSummary() {
       updatedGroup.updatedAmount += effectiveAmount(record);
       if (benefitMatchesType(record.benefitType, "movil")) updatedGroup.mobileCount += 1;
       if (benefitMatchesType(record.benefitType, "devolucion")) updatedGroup.refundCount += 1;
-      if (record.benefitType === "pago") updatedGroup.paymentCount += 1;
+      if (benefitMatchesType(record.benefitType, "pago")) updatedGroup.paymentCount += 1;
     }
 
     const pcGroup = ensureUserSummary(groups, record.pcMarkedBy);
@@ -2311,7 +2314,7 @@ async function applyBulkChanges() {
     if (bulkFields.mobileType.value) updated.mobileType = bulkFields.mobileType.value;
     if (bulkFields.passedPc.value) updated.passedPc = bulkFields.passedPc.value === "si";
     if (hasBlockNumber) updated.blockNumber = normalize(bulkFields.blockNumber.value);
-    if (bulkFields.benefitType.value === "pago") updated.amount = 100000;
+    if (["pago", "movil_pago"].includes(bulkFields.benefitType.value)) updated.amount = 100000;
     if (shouldApplyAutomaticIncentive(updated)) {
       updated.benefitType = "pago";
       updated.amount = 100000;
@@ -2631,7 +2634,7 @@ document.querySelector("#applyBulk").addEventListener("click", applyBulkChanges)
 requestSectorRemovalButton.addEventListener("click", requestSectorRemoval);
 document.querySelector("#clearBulkFields").addEventListener("click", clearSelectedFields);
 bulkFields.benefitType.addEventListener("change", () => {
-  if (bulkFields.benefitType.value === "pago") bulkFields.amount.value = "100000";
+  if (["pago", "movil_pago"].includes(bulkFields.benefitType.value)) bulkFields.amount.value = "100000";
 });
 newFunction.addEventListener("change", updateWatcherFields);
 newWatcherPollingPlace.addEventListener("change", renderWatcherTableOptions);
