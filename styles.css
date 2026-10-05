@@ -586,6 +586,7 @@ table { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 92
 .table-panel.operations table { min-width: 1040px; table-layout: auto; }
 .exit-poll-table { min-width: 720px; }
 .report-table { min-width: 860px; }
+.user-summary-table { min-width: 980px; }
 .summary-detail-table { min-width: 920px; }
 th, td { padding: .52rem .42rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
 tbody tr { transition: background .15s ease, transform .15s ease; }
@@ -632,6 +633,7 @@ td.actions {
 .row-button.vote-toggle.not-voted { background: rgba(210, 15, 31, .12); color: #9f0b17; border-color: rgba(210, 15, 31, .24); }
 .conditional[hidden] { display: none; }
 .deleted-users-section { margin-top: 1.2rem; }
+.report-summary-block { margin-bottom: 1.2rem; }
 .compact-title { margin-bottom: .65rem; }
 .deleted-user-row { opacity: .82; }
 

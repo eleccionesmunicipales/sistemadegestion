@@ -561,6 +561,17 @@ app.post("/api/users/:username/recover", requireAuth, requireAdmin, async (req, 
   res.json(publicUser(data));
 });
 
+app.post("/api/users/recover-all", requireAuth, requireAdmin, async (req, res) => {
+  const { data, error } = await supabase
+    .from("app_users")
+    .update({ is_active: true })
+    .eq("is_active", false)
+    .select("*");
+  if (error) return res.status(500).json({ error: error.message });
+  await writeAudit(req.user, "Recupero usuarios", `${data.length} usuarios`);
+  res.json(data.map(publicUser));
+});
+
 app.get("/api/records/version", requireAuth, async (req, res) => {
   try {
     const filter = isWatcher(req.user) ? watcherFilter(req.user) : null;

@@ -97,6 +97,9 @@
         <div id="deletedUsersSection" class="deleted-users-section" hidden>
           <div class="section-title compact-title">
             <h2>Usuarios eliminados</h2>
+            <div class="section-actions">
+              <button id="recoverAllUsers" class="ghost" type="button">Recuperar todos</button>
+            </div>
           </div>
           <div id="deletedUsersList" class="users-list"></div>
         </div>
@@ -443,10 +446,35 @@
         <div class="section-title">
           <h2>Reporte del sistema</h2>
           <div class="section-actions">
+            <button id="printUserSummaryPdf" type="button" class="primary">Generar PDF por usuario</button>
             <button id="printPcReport" type="button" class="primary">Generar PDF Paso por PC</button>
           </div>
         </div>
         <p class="hint">Historial de acciones realizadas por los usuarios en este navegador.</p>
+        <div class="report-summary-block">
+          <div class="section-title compact-title">
+            <h2>Resumen por usuario</h2>
+          </div>
+          <div class="table-wrap">
+            <table class="user-summary-table">
+              <thead>
+                <tr>
+                  <th>Usuario</th>
+                  <th>Funcion</th>
+                  <th>Cargados/Editados</th>
+                  <th>Paso por PC</th>
+                  <th>Moviles</th>
+                  <th>Devolucion</th>
+                  <th>Incentivos</th>
+                  <th>Monto cargado</th>
+                  <th>Monto PC</th>
+                </tr>
+              </thead>
+              <tbody id="userSummaryBody"></tbody>
+            </table>
+          </div>
+          <p id="userSummaryEmpty" class="empty">Todavia no hay actividad por usuario.</p>
+        </div>
         <div class="table-wrap">
           <table class="report-table">
             <thead>
@@ -477,6 +505,6 @@
       </section>
     </div>
 
-    <script src="app.js?v=20260929-admin-acepta-solicitud"></script>
+    <script src="app.js?v=20261005-resumen-usuario"></script>
   </body>
 </html>

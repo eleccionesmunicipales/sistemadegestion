@@ -52,6 +52,7 @@ const userMessage = document.querySelector("#userMessage");
 const usersList = document.querySelector("#usersList");
 const deletedUsersSection = document.querySelector("#deletedUsersSection");
 const deletedUsersList = document.querySelector("#deletedUsersList");
+const recoverAllUsers = document.querySelector("#recoverAllUsers");
 const logoutButton = document.querySelector("#logoutButton");
 const activeUserBadge = document.querySelector("#activeUserBadge");
 const summaryPanel = document.querySelector("#summaryPanel");
@@ -109,6 +110,8 @@ const liderBody = document.querySelector("#liderBody");
 const liderEmpty = document.querySelector("#liderEmpty");
 const printLiderVotesPdfButtons = document.querySelectorAll("[data-lider-votes-pdf]");
 const reportPanel = document.querySelector("#reportPanel");
+const userSummaryBody = document.querySelector("#userSummaryBody");
+const userSummaryEmpty = document.querySelector("#userSummaryEmpty");
 const auditLogBody = document.querySelector("#auditLogBody");
 const auditLogEmpty = document.querySelector("#auditLogEmpty");
 const bulkTools = document.querySelector("#bulkTools");
@@ -282,7 +285,10 @@ async function loadAdminViewData() {
     return true;
   }
   if (currentView === "report") {
-    auditLog = await apiRequest("/api/audit");
+    [auditLog, users] = await Promise.all([
+      apiRequest("/api/audit"),
+      apiRequest("/api/users"),
+    ]);
     renderReport();
     return true;
   }
@@ -1745,6 +1751,25 @@ async function setLiderStatus(recordId, statusLider) {
 }
 
 function renderReport() {
+  const summary = getUserSummary();
+  userSummaryBody.innerHTML = summary.map((item) => `
+    <tr>
+      <td>
+        <strong>${escapeHtml(item.name)}</strong><br>
+        <span>${escapeHtml(item.username)}</span>
+      </td>
+      <td>${escapeHtml(item.functionName || "Sin funcion")}</td>
+      <td>${item.updatedCount}</td>
+      <td>${item.pcCount}</td>
+      <td>${item.mobileCount}</td>
+      <td>${item.refundCount}</td>
+      <td>${item.paymentCount}</td>
+      <td>${money(item.updatedAmount)}</td>
+      <td>${money(item.pcAmount)}</td>
+    </tr>
+  `).join("");
+  userSummaryEmpty.hidden = summary.length > 0;
+
   auditLogBody.innerHTML = auditLog.map((item) => `
     <tr>
       <td>${escapeHtml(new Date(item.date).toLocaleString("es-PY"))}</td>
@@ -1754,6 +1779,127 @@ function renderReport() {
     </tr>
   `).join("");
   auditLogEmpty.hidden = auditLog.length > 0;
+}
+
+function getUserDisplay(user) {
+  const name = [user.firstName, user.lastName].filter(Boolean).join(" ");
+  return name || user.username;
+}
+
+function ensureUserSummary(groups, username) {
+  const cleanUsername = normalize(username);
+  if (!cleanUsername) return null;
+  if (!groups.has(cleanUsername)) {
+    const user = users.find((item) => normalizeKey(item.username) === normalizeKey(cleanUsername));
+    groups.set(cleanUsername, {
+      username: cleanUsername,
+      name: user ? getUserDisplay(user) : cleanUsername,
+      functionName: user?.functionName || "",
+      updatedCount: 0,
+      pcCount: 0,
+      mobileCount: 0,
+      refundCount: 0,
+      paymentCount: 0,
+      updatedAmount: 0,
+      pcAmount: 0,
+    });
+  }
+  return groups.get(cleanUsername);
+}
+
+function getUserSummary() {
+  const groups = new Map();
+  users.forEach((user) => {
+    if (user.username) ensureUserSummary(groups, user.username);
+  });
+
+  records.forEach((record) => {
+    const updatedGroup = ensureUserSummary(groups, record.updatedBy);
+    if (updatedGroup) {
+      updatedGroup.updatedCount += 1;
+      updatedGroup.updatedAmount += effectiveAmount(record);
+      if (benefitMatchesType(record.benefitType, "movil")) updatedGroup.mobileCount += 1;
+      if (benefitMatchesType(record.benefitType, "devolucion")) updatedGroup.refundCount += 1;
+      if (record.benefitType === "pago") updatedGroup.paymentCount += 1;
+    }
+
+    const pcGroup = ensureUserSummary(groups, record.pcMarkedBy);
+    if (pcGroup && record.passedPc) {
+      pcGroup.pcCount += 1;
+      pcGroup.pcAmount += effectiveAmount(record);
+    }
+  });
+
+  return Array.from(groups.values())
+    .filter((item) => item.updatedCount || item.pcCount)
+    .sort((a, b) => (b.updatedCount + b.pcCount) - (a.updatedCount + a.pcCount) || a.username.localeCompare(b.username, "es"));
+}
+
+function generateUserSummaryPdf() {
+  const summary = getUserSummary();
+  const generatedAt = new Date().toLocaleString("es-PY");
+  const rows = summary.map((item) => `
+    <tr>
+      <td>${escapeHtml(item.name)}</td>
+      <td>${escapeHtml(item.username)}</td>
+      <td>${escapeHtml(item.functionName || "Sin funcion")}</td>
+      <td>${item.updatedCount}</td>
+      <td>${item.pcCount}</td>
+      <td>${item.mobileCount}</td>
+      <td>${item.refundCount}</td>
+      <td>${item.paymentCount}</td>
+      <td>${money(item.updatedAmount)}</td>
+      <td>${money(item.pcAmount)}</td>
+    </tr>
+  `).join("");
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    showSystemAlert("El navegador bloqueo la ventana del reporte. Permita ventanas emergentes para generar el PDF.");
+    return;
+  }
+
+  printWindow.document.write(`
+    <!doctype html>
+    <html lang="es">
+      <head>
+        <meta charset="utf-8">
+        <title>Resumen por usuario</title>
+        <style>
+          body { font-family: Arial, sans-serif; color: #111; margin: 24px; }
+          h1 { margin: 0 0 6px; font-size: 22px; }
+          p { margin: 0 0 14px; color: #555; }
+          table { width: 100%; border-collapse: collapse; font-size: 10px; }
+          th, td { border: 1px solid #ddd; padding: 5px; text-align: left; vertical-align: top; }
+          th { background: #f1f1f1; text-transform: uppercase; font-size: 9px; }
+        </style>
+      </head>
+      <body>
+        <h1>Resumen por usuario</h1>
+        <p>Generado: ${escapeHtml(generatedAt)} | Usuarios con actividad: ${summary.length}</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Usuario</th>
+              <th>Funcion</th>
+              <th>Cargados/Editados</th>
+              <th>Paso por PC</th>
+              <th>Moviles</th>
+              <th>Devolucion</th>
+              <th>Incentivos</th>
+              <th>Monto cargado</th>
+              <th>Monto PC</th>
+            </tr>
+          </thead>
+          <tbody>${rows || `<tr><td colspan="10">No hay actividad por usuario.</td></tr>`}</tbody>
+        </table>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.focus();
+  registerAction("Genero reporte PDF", `Resumen por usuario: ${summary.length} usuarios`);
+  printWindow.print();
 }
 
 function generatePcReportPdf() {
@@ -2225,6 +2371,7 @@ function exportCsv() {
 }
 
 document.querySelector("#exportCsv").addEventListener("click", exportCsv);
+document.querySelector("#printUserSummaryPdf").addEventListener("click", generateUserSummaryPdf);
 document.querySelector("#printPcReport").addEventListener("click", generatePcReportPdf);
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -2304,6 +2451,23 @@ deletedUsersList.addEventListener("click", async (event) => {
     const recoveredUser = await apiRequest(`/api/users/${encodeURIComponent(button.dataset.recoverUser)}/recover`, { method: "POST" });
     users = users.map((user) => user.username === button.dataset.recoverUser ? recoveredUser : user);
     showSystemAlert("Usuario recuperado correctamente.");
+  } catch (error) {
+    showSystemAlert(error.message);
+  }
+  renderUsersList();
+});
+recoverAllUsers.addEventListener("click", async () => {
+  const deletedCount = users.filter((user) => user.active === false).length;
+  if (!deletedCount) return;
+  const confirmed = await showSystemConfirm(`Se recuperaran ${deletedCount} usuarios eliminados. Desea continuar?`, "Recuperar usuarios");
+  if (!confirmed) return;
+  try {
+    const recoveredUsers = await apiRequest("/api/users/recover-all", { method: "POST" });
+    users = users.map((user) => {
+      const recoveredUser = recoveredUsers.find((item) => item.username === user.username);
+      return recoveredUser || user;
+    });
+    showSystemAlert(`Se recuperaron ${recoveredUsers.length} usuarios.`);
   } catch (error) {
     showSystemAlert(error.message);
   }
