@@ -50,6 +50,8 @@ const saveUserButton = document.querySelector("#saveUserButton");
 const cancelUserEdit = document.querySelector("#cancelUserEdit");
 const userMessage = document.querySelector("#userMessage");
 const usersList = document.querySelector("#usersList");
+const deletedUsersSection = document.querySelector("#deletedUsersSection");
+const deletedUsersList = document.querySelector("#deletedUsersList");
 const logoutButton = document.querySelector("#logoutButton");
 const activeUserBadge = document.querySelector("#activeUserBadge");
 const summaryPanel = document.querySelector("#summaryPanel");
@@ -191,7 +193,7 @@ function loadUsers() {
     // Use the initial admin if saved users are not readable.
   }
 
-  const initialUsers = [{ username: "admin", password: "admin123", role: "admin" }];
+  const initialUsers = [{ username: "admin", password: "admin123", role: "admin", active: true }];
   localStorage.setItem(USERS_KEY, JSON.stringify(initialUsers));
   return initialUsers;
 }
@@ -1198,10 +1200,14 @@ async function switchView(view) {
 function renderUsersList() {
   if (!isAdmin()) {
     usersList.innerHTML = "";
+    deletedUsersList.innerHTML = "";
+    deletedUsersSection.hidden = true;
     return;
   }
 
-  const operators = users.filter((user) => user.username !== "admin");
+  const activeUsers = users.filter((user) => user.active !== false);
+  const deletedUsers = users.filter((user) => user.active === false);
+  const operators = activeUsers.filter((user) => user.username !== "admin");
   usersList.innerHTML = operators.length ? operators.map((user) => `
     <div class="user-row">
       <div class="user-info">
@@ -1217,6 +1223,21 @@ function renderUsersList() {
       </div>
     </div>
   `).join("") : `<p class="hint">Todavia no hay operadores creados.</p>`;
+
+  deletedUsersSection.hidden = !deletedUsers.length;
+  deletedUsersList.innerHTML = deletedUsers.length ? deletedUsers.map((user) => `
+    <div class="user-row deleted-user-row">
+      <div class="user-info">
+        <strong>${escapeHtml([user.firstName, user.lastName].filter(Boolean).join(" ") || user.username)}</strong>
+        <span>Usuario: ${escapeHtml(user.username)}</span>
+        <span>Funcion: ${escapeHtml(user.functionName || "Sin funcion asignada")}</span>
+        <span>Descripcion: ${escapeHtml(user.functionDescription || "Sin descripcion")}</span>
+      </div>
+      <div class="actions">
+        <button class="row-button recover" type="button" data-recover-user="${escapeHtml(user.username)}">Recuperar</button>
+      </div>
+    </div>
+  `).join("") : "";
 }
 
 function resetUserForm() {
@@ -2268,9 +2289,21 @@ usersList.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-delete-user]");
   if (!button) return;
   try {
-    await apiRequest(`/api/users/${encodeURIComponent(button.dataset.deleteUser)}`, { method: "DELETE" });
-    users = users.filter((user) => user.username !== button.dataset.deleteUser);
+    const deletedUser = await apiRequest(`/api/users/${encodeURIComponent(button.dataset.deleteUser)}`, { method: "DELETE" });
+    users = users.map((user) => user.username === button.dataset.deleteUser ? deletedUser : user);
     if (editingUsername === button.dataset.deleteUser) resetUserForm();
+  } catch (error) {
+    showSystemAlert(error.message);
+  }
+  renderUsersList();
+});
+deletedUsersList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-recover-user]");
+  if (!button) return;
+  try {
+    const recoveredUser = await apiRequest(`/api/users/${encodeURIComponent(button.dataset.recoverUser)}/recover`, { method: "POST" });
+    users = users.map((user) => user.username === button.dataset.recoverUser ? recoveredUser : user);
+    showSystemAlert("Usuario recuperado correctamente.");
   } catch (error) {
     showSystemAlert(error.message);
   }

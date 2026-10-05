@@ -29,7 +29,7 @@ Vistas
 - Resumen: solo para administradores. Muestra votantes, paso por PC, presupuestado, pagado, moviles, devolucion de pasajes y pagos. Al tocar cada tarjeta muestra la lista de personas correspondiente.
 - Moviles: muestra la lista y detalle de quienes estan marcados como movil completo o parcial.
 - Devolucion de Pasaje: muestra la lista y detalle de quienes tienen devolucion de pasaje.
-- Usuarios: permite al administrador crear operadores con nombre, apellido, usuario, contraseña, funcion a cumplir y descripcion de funcion.
+- Usuarios: permite al administrador crear operadores con nombre, apellido, usuario, contraseña, funcion a cumplir, descripcion de funcion y recuperar usuarios eliminados.
 - Al crear un usuario con funcion Veedor, el administrador selecciona local de votacion y mesa. Ese usuario solo ve su mesa asignada y solo puede marcar VOTO/NO VOTO.
 - El administrador ve todas las vistas del sistema y puede ver la contraseña creada para cada operador.
 - Si al crear un usuario se elige la funcion Admin, ese usuario tambien tendra acceso completo de administrador.

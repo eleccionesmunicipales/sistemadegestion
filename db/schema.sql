@@ -7,6 +7,7 @@ create table if not exists app_users (
   function_name text not null default 'Sistema de Gestion',
   function_description text not null default '',
   role text not null default 'operator' check (role in ('admin', 'operator')),
+  is_active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

@@ -626,10 +626,14 @@ td.actions {
 .pc-no { background: rgba(210, 15, 31, .12); color: #9f0b17; border-color: rgba(210, 15, 31, .24); }
 .row-button { padding: .3rem .42rem; margin-right: .16rem; background: #fff7e6; color: var(--ink); border: 1px solid rgba(210,15,31,.12); font-size: .68rem; line-height: 1; }
 .row-button.delete { background: rgba(210, 15, 31, .1); color: #9f0b17; }
+.row-button.recover { background: rgba(18, 177, 91, .14); color: #08783b; border-color: rgba(18, 177, 91, .3); }
 .row-button.vote-toggle { min-width: 3.9rem; padding-inline: .34rem; font-size: .62rem; }
 .row-button.vote-toggle.voted { background: rgba(18, 177, 91, .16); color: #08783b; border-color: rgba(18, 177, 91, .32); }
 .row-button.vote-toggle.not-voted { background: rgba(210, 15, 31, .12); color: #9f0b17; border-color: rgba(210, 15, 31, .24); }
 .conditional[hidden] { display: none; }
+.deleted-users-section { margin-top: 1.2rem; }
+.compact-title { margin-bottom: .65rem; }
+.deleted-user-row { opacity: .82; }
 
 .system-modal {
   position: fixed;

@@ -34,6 +34,7 @@ function publicUser(user) {
     functionName: user.function_name,
     functionDescription: user.function_description,
     role: user.role,
+    active: user.is_active !== false,
   };
 }
 
@@ -461,6 +462,7 @@ app.post("/api/auth/login", async (req, res) => {
     .select("*")
     .eq("username", username)
     .eq("password", password)
+    .eq("is_active", true)
     .maybeSingle();
 
   if (error) return res.status(500).json({ error: error.message });
@@ -536,10 +538,27 @@ app.put("/api/users/:username", requireAuth, requireAdmin, async (req, res) => {
 
 app.delete("/api/users/:username", requireAuth, requireAdmin, async (req, res) => {
   if (req.params.username === "admin") return res.status(400).json({ error: "No se puede eliminar el admin principal" });
-  const { error } = await supabase.from("app_users").delete().eq("username", req.params.username);
+  const { data, error } = await supabase
+    .from("app_users")
+    .update({ is_active: false })
+    .eq("username", req.params.username)
+    .select("*")
+    .single();
   if (error) return res.status(500).json({ error: error.message });
   await writeAudit(req.user, "Elimino usuario", req.params.username);
-  res.json({ ok: true });
+  res.json(publicUser(data));
+});
+
+app.post("/api/users/:username/recover", requireAuth, requireAdmin, async (req, res) => {
+  const { data, error } = await supabase
+    .from("app_users")
+    .update({ is_active: true })
+    .eq("username", req.params.username)
+    .select("*")
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  await writeAudit(req.user, "Recupero usuario", req.params.username);
+  res.json(publicUser(data));
 });
 
 app.get("/api/records/version", requireAuth, async (req, res) => {
