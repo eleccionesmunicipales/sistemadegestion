@@ -543,7 +543,6 @@ function hasBulkNonPcChanges() {
     || normalize(bulkFields.city.value) !== ""
     || bulkFields.neighborhood.value
     || bulkFields.mobileType.value
-    || bulkFields.passedPc2.value
     || normalize(bulkFields.blockNumber.value) !== ""
   );
 }
@@ -552,7 +551,7 @@ function updateBulkEditorForSelection() {
   const loadedRecord = lockedSelectedLoadedRecord();
   const sectorType = currentSectorEditType();
   const sectorEditMode = Boolean(loadedRecord && sectorType && benefitMatchesType(recordBenefitTypes(loadedRecord), sectorType));
-  const pcOnlyMode = Boolean(loadedRecord && !loadedRecord.passedPc);
+  const pcOnlyMode = Boolean(loadedRecord && (!loadedRecord.passedPc || canMarkAnotherPc(loadedRecord)));
   Object.entries(bulkFields).forEach(([field, control]) => {
     const allowedSectorField = ["amount", "amount2", "passedPc", "passedPc2"].includes(field) || (sectorType === "movil" && field === "mobileType");
     const container = control.closest("label") || control.closest("fieldset");
@@ -843,6 +842,10 @@ function recordBenefitTypes(record) {
 
 function recordPassedPc(record) {
   return Boolean(record.passedPc || record.passedPc2);
+}
+
+function canMarkAnotherPc(record) {
+  return Boolean(record?.passedPc && !record?.passedPc2 && record?.benefitType2);
 }
 
 function benefitMatchesType(benefitType, type) {
@@ -2260,7 +2263,7 @@ recordsBody.addEventListener("click", (event) => {
 
   if (button.dataset.action === "edit") {
     if (isWatcher()) return;
-    if (!isAdmin() && record.passedPc) {
+    if (!isAdmin() && record.passedPc && !canMarkAnotherPc(record)) {
       showSystemAlert(pcLockedMessage(record));
       return;
     }
@@ -2354,7 +2357,8 @@ async function applyBulkChanges() {
     showSystemAlert(sectorMessage);
     return;
   }
-  if (loadedRecord && !canSectorEditLoadedRecord(loadedRecord) && (bulkFields.passedPc.value !== "si" || hasBulkNonPcChanges())) {
+  const markingPcOnly = (bulkFields.passedPc.value === "si" || bulkFields.passedPc2.value === "si") && !hasBulkNonPcChanges();
+  if (loadedRecord && !canSectorEditLoadedRecord(loadedRecord) && !markingPcOnly) {
     showSystemAlert(loadedRecordMessage(loadedRecord));
     return;
   }

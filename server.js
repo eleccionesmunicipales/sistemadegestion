@@ -327,9 +327,12 @@ function sameRecordValue(left, right) {
 }
 
 function isOnlyPcMark(existingRecord, payload) {
-  if (existingRecord.passed_pc || !payload.passed_pc) return false;
-  const sameBudget = sameRecordValue(existingRecord.benefit_type, payload.benefit_type)
-    && Number(existingRecord.amount || 0) === Number(payload.amount || 0);
+  const markingFirstPc = !existingRecord.passed_pc && payload.passed_pc;
+  const markingSecondPc = existingRecord.passed_pc && !existingRecord.passed_pc_2 && payload.passed_pc_2 && existingRecord.benefit_type_2;
+  if (!markingFirstPc && !markingSecondPc) return false;
+  const sameBudget = markingSecondPc
+    ? sameRecordValue(existingRecord.benefit_type_2, payload.benefit_type_2) && Number(existingRecord.amount_2 || 0) === Number(payload.amount_2 || 0)
+    : sameRecordValue(existingRecord.benefit_type, payload.benefit_type) && Number(existingRecord.amount || 0) === Number(payload.amount || 0);
   const automaticIncentive = ["", "gratis"].includes(existingRecord.benefit_type || "")
     && Number(existingRecord.amount || 0) <= 0
     && payload.benefit_type === "pago"
