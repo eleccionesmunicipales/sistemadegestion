@@ -260,17 +260,14 @@
         </div>
         <div id="bulkTools" class="bulk-tools" hidden>
           <p id="editModeHint" class="edit-mode-hint">Editando registro seleccionado</p>
-          <label>Tipo
-            <select id="bulkBenefitType">
-              <option value="">No cambiar</option>
-              <option value="gratis">Gratis</option>
-              <option value="pago">Incentivo</option>
-              <option value="devolucion">Devolucion de pasaje</option>
-              <option value="movil">Movil</option>
-              <option value="movil_pago">Movil e Incentivo</option>
-              <option value="movil_devolucion">Devolucion y Movil</option>
-            </select>
-          </label>
+          <fieldset class="type-checks">
+            <legend>Tipo</legend>
+            <input id="bulkBenefitType" type="hidden">
+            <label class="check-row"><input type="checkbox" value="movil" data-bulk-benefit-type> Movil</label>
+            <label class="check-row"><input type="checkbox" value="devolucion" data-bulk-benefit-type> Devolucion</label>
+            <label class="check-row"><input type="checkbox" value="pago" data-bulk-benefit-type> Incentivo</label>
+            <label class="check-row"><input type="checkbox" value="gratis" data-bulk-benefit-type> Gratis</label>
+          </fieldset>
           <label>Estado
             <select id="bulkStatus">
               <option value="">No cambiar</option>
@@ -281,6 +278,9 @@
           </label>
           <label>Monto
             <input id="bulkAmount" type="number" min="0" step="1000" placeholder="No cambiar">
+          </label>
+          <label id="bulkAmount2Label" hidden>Segundo monto
+            <input id="bulkAmount2" type="number" min="0" step="1000" placeholder="No cambiar">
           </label>
           <label>Ciudad
             <input id="bulkCity" type="text" placeholder="No cambiar">
@@ -316,6 +316,13 @@
           </label>
           <label>Paso por PC
             <select id="bulkPassedPc">
+              <option value="">No cambiar</option>
+              <option value="si">Si</option>
+              <option value="no">No</option>
+            </select>
+          </label>
+          <label id="bulkPassedPc2Label" hidden>Segundo paso por PC
+            <select id="bulkPassedPc2">
               <option value="">No cambiar</option>
               <option value="si">Si</option>
               <option value="no">No</option>
@@ -508,6 +515,6 @@
       </section>
     </div>
 
-    <script src="app.js?v=20261005-movil-incentivo"></script>
+    <script src="app.js?v=20261005-tipos-casillas"></script>
   </body>
 </html>

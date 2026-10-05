@@ -54,11 +54,15 @@ function toRecord(row) {
     status: row.status,
     statusLider: row.status_lider || "",
     benefitType: row.benefit_type,
+    benefitType2: row.benefit_type_2 || "",
     amount: Number(row.amount || 0),
+    amount2: Number(row.amount_2 || 0),
     city: row.city,
     mobileType: row.mobile_type,
     passedPc: Boolean(row.passed_pc),
     pcMarkedBy: row.pc_marked_by || "",
+    passedPc2: Boolean(row.passed_pc_2),
+    pcMarkedBy2: row.pc_marked_by_2 || "",
     voted: Boolean(row.voted),
     blockNumber: row.block_number || "",
     updatedBy: publicUpdatedBy(row.updated_by),
@@ -122,6 +126,7 @@ function applyAutomaticIncentive(payload) {
 
 function fromRecord(record, username = "", existingRecord = null) {
   const existingPcMarkedBy = existingRecord?.pc_marked_by || existingRecord?.pcMarkedBy || "";
+  const existingPcMarkedBy2 = existingRecord?.pc_marked_by_2 || existingRecord?.pcMarkedBy2 || "";
   const existingStatusLider = existingRecord?.status_lider || existingRecord?.statusLider || "";
   const payload = {
     id: String(record.id),
@@ -138,11 +143,15 @@ function fromRecord(record, username = "", existingRecord = null) {
     status: record.status || "",
     status_lider: existingRecord ? existingStatusLider : statusValue(record.statusLider),
     benefit_type: record.benefitType || "",
+    benefit_type_2: record.benefitType2 || "",
     amount: Number(record.amount || 0),
+    amount_2: Number(record.amount2 || 0),
     city: record.city || "",
     mobile_type: record.mobileType || "",
     passed_pc: Boolean(record.passedPc),
     pc_marked_by: record.passedPc ? (existingPcMarkedBy || username) : "",
+    passed_pc_2: Boolean(record.passedPc2),
+    pc_marked_by_2: record.passedPc2 ? (existingPcMarkedBy2 || username) : "",
     voted: Boolean(record.voted),
     block_number: String(record.blockNumber || ""),
     updated_by: username,
@@ -356,7 +365,7 @@ function isAllowedSectorUpdate(user, existingRecord, payload) {
   if (Number(payload.amount || 0) <= 0) return false;
   if (benefitMatchesType(sectorType, "movil") && !["completo", "parcial"].includes(payload.mobile_type)) return false;
 
-  const allowedChanges = new Set(["amount", "passed_pc", "pc_marked_by", "updated_by"]);
+  const allowedChanges = new Set(["amount", "amount_2", "passed_pc", "passed_pc_2", "pc_marked_by", "pc_marked_by_2", "updated_by"]);
   if (benefitMatchesType(sectorType, "movil") && canUseMobileSector(user)) allowedChanges.add("mobile_type");
   const fields = [
     "first_names",
@@ -371,14 +380,18 @@ function isAllowedSectorUpdate(user, existingRecord, payload) {
     "neighborhood",
     "status",
     "status_lider",
-    "benefit_type",
+      "benefit_type",
+      "benefit_type_2",
+      "amount_2",
     "city",
     "mobile_type",
-    "passed_pc",
-    "pc_marked_by",
+      "passed_pc",
+      "passed_pc_2",
+      "pc_marked_by",
+      "pc_marked_by_2",
     "voted",
     "block_number",
-    "amount",
+      "amount",
     "updated_by",
   ];
 
@@ -390,9 +403,10 @@ async function findPcLockedRecord(ids) {
   if (!cleanIds.length) return null;
   const { data, error } = await supabase
     .from("records")
-    .select("id, passed_pc, pc_marked_by, neighborhood, benefit_type")
+      .select("id, passed_pc, passed_pc_2, pc_marked_by, pc_marked_by_2, neighborhood, benefit_type")
     .in("id", cleanIds)
-    .eq("passed_pc", true)
+      .eq("passed_pc", true)
+      .eq("passed_pc_2", true)
     .limit(1);
   if (error) throw error;
   return data?.[0] || null;
@@ -630,7 +644,7 @@ app.put("/api/records/:id", requireAuth, async (req, res) => {
   }
   const payload = fromRecord({ ...req.body, id: req.params.id }, req.user.username, existing);
   if (req.user.role !== "admin" && existing?.voted) payload.voted = true;
-  if (req.user.role !== "admin" && existing?.passed_pc) return res.status(403).json({ error: await pcLockedMessage(existing) });
+  if (req.user.role !== "admin" && existing?.passed_pc && existing?.passed_pc_2) return res.status(403).json({ error: await pcLockedMessage(existing) });
   if (await preventLoadedRecordEdit(req, res, existing, payload)) return;
   const { data, error } = await supabase.from("records").upsert(payload).select("*").single();
   if (error) return res.status(400).json({ error: error.message });
@@ -703,7 +717,7 @@ app.post("/api/records/bulk", requireAuth, async (req, res) => {
       if (existingById.get(record.id)?.voted) record.voted = true;
     });
 
-    const pcLockedRecord = payload.map((record) => existingById.get(record.id)).find((record) => record?.passed_pc);
+    const pcLockedRecord = payload.map((record) => existingById.get(record.id)).find((record) => record?.passed_pc && record?.passed_pc_2);
     if (pcLockedRecord) return res.status(403).json({ error: await pcLockedMessage(pcLockedRecord) });
 
     const loadedRecord = payload.find((record) => {
@@ -717,7 +731,7 @@ app.post("/api/records/bulk", requireAuth, async (req, res) => {
   }
   const { error } = await supabase.from("records").upsert(payload);
   if (error) return res.status(400).json({ error: error.message });
-  const pcMarked = payload.filter((record) => record.passed_pc && record.pc_marked_by === req.user.username).length;
+  const pcMarked = payload.filter((record) => (record.passed_pc && record.pc_marked_by === req.user.username) || (record.passed_pc_2 && record.pc_marked_by_2 === req.user.username)).length;
   const details = payload.slice(0, 10).map((record) => {
     const type = record.benefit_type || "sin tipo";
     const status = record.status || "sin estado";
