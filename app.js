@@ -1902,6 +1902,103 @@ function generateUserSummaryPdf() {
   printWindow.print();
 }
 
+function getUserPaymentGroups() {
+  const groups = new Map();
+  records
+    .filter((record) => record.passedPc && effectiveAmount(record) > 0)
+    .forEach((record) => {
+      const username = normalize(record.pcMarkedBy || record.updatedBy || "Sin usuario");
+      const summary = ensureUserSummary(groups, username);
+      if (!summary.records) summary.records = [];
+      summary.records.push(record);
+      summary.pcAmount += effectiveAmount(record);
+    });
+
+  return Array.from(groups.values())
+    .map((group) => ({
+      ...group,
+      records: group.records.sort((a, b) => fixNameText(a.lastNames).localeCompare(fixNameText(b.lastNames), "es") || fixNameText(a.firstNames || a.fullName || "").localeCompare(fixNameText(b.firstNames || b.fullName || ""), "es")),
+    }))
+    .sort((a, b) => b.pcAmount - a.pcAmount || a.username.localeCompare(b.username, "es"));
+}
+
+function generateUserPaymentDetailPdf() {
+  const groups = getUserPaymentGroups();
+  const totalRecords = groups.reduce((sum, group) => sum + group.records.length, 0);
+  const totalAmount = groups.reduce((sum, group) => sum + group.pcAmount, 0);
+  const generatedAt = new Date().toLocaleString("es-PY");
+  const sections = groups.map((group) => {
+    const rows = group.records.map((record) => `
+      <tr>
+        <td>${escapeHtml(fixNameText(record.lastNames))}</td>
+        <td>${escapeHtml(fixNameText(record.firstNames || record.fullName || ""))}</td>
+        <td>${escapeHtml(record.documentNumber)}</td>
+        <td>${escapeHtml(record.neighborhood)}</td>
+        <td>${escapeHtml(statusLabel(record.status))}</td>
+        <td>${escapeHtml(benefitLabel(record.benefitType) || "-")}</td>
+        <td>${escapeHtml(getDetail(record))}</td>
+        <td>${money(effectiveAmount(record))}</td>
+      </tr>
+    `).join("");
+    return `
+      <section class="user-section">
+        <h2>${escapeHtml(group.name)} <span>(${escapeHtml(group.username)})</span></h2>
+        <p>Funcion: ${escapeHtml(group.functionName || "Sin funcion")} | Pagos: ${group.records.length} | Total: ${money(group.pcAmount)}</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Apellidos</th>
+              <th>Nombres</th>
+              <th>Cedula</th>
+              <th>Barrio/compania</th>
+              <th>Estado</th>
+              <th>Tipo</th>
+              <th>Detalle</th>
+              <th>Monto</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </section>
+    `;
+  }).join("");
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    showSystemAlert("El navegador bloqueo la ventana del reporte. Permita ventanas emergentes para generar el PDF.");
+    return;
+  }
+
+  printWindow.document.write(`
+    <!doctype html>
+    <html lang="es">
+      <head>
+        <meta charset="utf-8">
+        <title>Detalle de pagos por usuario</title>
+        <style>
+          body { font-family: Arial, sans-serif; color: #111; margin: 24px; }
+          h1 { margin: 0 0 6px; font-size: 22px; }
+          h2 { margin: 18px 0 4px; font-size: 16px; }
+          h2 span { color: #555; font-weight: 400; }
+          p { margin: 0 0 12px; color: #555; }
+          table { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 10px; }
+          th, td { border: 1px solid #ddd; padding: 5px; text-align: left; vertical-align: top; }
+          th { background: #f1f1f1; text-transform: uppercase; font-size: 9px; }
+          .user-section { break-inside: avoid; page-break-inside: avoid; }
+        </style>
+      </head>
+      <body>
+        <h1>Detalle de pagos por usuario</h1>
+        <p>Generado: ${escapeHtml(generatedAt)} | Pagos: ${totalRecords} | Total pagado: ${money(totalAmount)}</p>
+        ${sections || `<p>No hay pagos registrados.</p>`}
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.focus();
+  registerAction("Genero reporte PDF", `Detalle pagos por usuario: ${totalRecords} pagos`);
+  printWindow.print();
+}
+
 function generatePcReportPdf() {
   const pcRecords = records.filter((record) => record.passedPc);
   const generatedAt = new Date().toLocaleString("es-PY");
@@ -2372,6 +2469,7 @@ function exportCsv() {
 
 document.querySelector("#exportCsv").addEventListener("click", exportCsv);
 document.querySelector("#printUserSummaryPdf").addEventListener("click", generateUserSummaryPdf);
+document.querySelector("#printUserPaymentDetailPdf").addEventListener("click", generateUserPaymentDetailPdf);
 document.querySelector("#printPcReport").addEventListener("click", generatePcReportPdf);
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
