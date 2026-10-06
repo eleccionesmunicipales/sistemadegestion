@@ -1222,7 +1222,6 @@ async function switchView(view) {
   bulkEditorOpen = false;
   if (currentView === "mobile" || currentView === "refund" || currentView === "lider") {
     filterType.value = "";
-    filterPc.value = "";
   }
   if (currentView !== "lider") filterLiderStatus.value = "";
   if (currentView === "operations" && selectedSummary === "payment") {
@@ -1488,7 +1487,7 @@ function renderViewChrome() {
     button.classList.toggle("active", button.dataset.viewButton === currentView);
   });
   viewOnlyControls.forEach((control) => {
-    control.hidden = control.dataset.viewOnly !== currentView || isWatcher();
+    control.hidden = !control.dataset.viewOnly.split(/\s+/).includes(currentView) || isWatcher();
   });
   tableHead.innerHTML = isWatcher() ? `
     <tr>
