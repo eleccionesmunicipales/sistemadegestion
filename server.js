@@ -65,6 +65,7 @@ function toRecord(row) {
     pcMarkedBy2: row.pc_marked_by_2 || "",
     voted: Boolean(row.voted),
     blockNumber: row.block_number || "",
+    observation: row.observation || "",
     updatedBy: publicUpdatedBy(row.updated_by),
   };
 }
@@ -154,6 +155,7 @@ function fromRecord(record, username = "", existingRecord = null) {
     pc_marked_by_2: record.passedPc2 ? (existingPcMarkedBy2 || username) : "",
     voted: Boolean(record.voted),
     block_number: String(record.blockNumber || ""),
+    observation: String(record.observation || ""),
     updated_by: username,
   };
   return applyAutomaticIncentive(payload);
@@ -319,6 +321,7 @@ function hasOperationalLoad(record) {
     || record?.neighborhood
     || record?.mobile_type
     || record?.block_number
+    || record?.observation
   );
 }
 
@@ -368,7 +371,7 @@ function isAllowedSectorUpdate(user, existingRecord, payload) {
   if (Number(payload.amount || 0) <= 0) return false;
   if (benefitMatchesType(sectorType, "movil") && !["completo", "parcial"].includes(payload.mobile_type)) return false;
 
-  const allowedChanges = new Set(["amount", "amount_2", "passed_pc", "passed_pc_2", "pc_marked_by", "pc_marked_by_2", "updated_by"]);
+  const allowedChanges = new Set(["amount", "amount_2", "passed_pc", "passed_pc_2", "pc_marked_by", "pc_marked_by_2", "observation", "updated_by"]);
   if (benefitMatchesType(sectorType, "movil") && canUseMobileSector(user)) allowedChanges.add("mobile_type");
   const fields = [
     "first_names",
@@ -393,7 +396,8 @@ function isAllowedSectorUpdate(user, existingRecord, payload) {
       "pc_marked_by",
       "pc_marked_by_2",
     "voted",
-    "block_number",
+      "block_number",
+      "observation",
       "amount",
     "updated_by",
   ];
