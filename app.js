@@ -125,17 +125,21 @@ const bulkFields = {
   status: document.querySelector("#bulkStatus"),
   amount: document.querySelector("#bulkAmount"),
   amount2: document.querySelector("#bulkAmount2"),
+  amount3: document.querySelector("#bulkAmount3"),
   city: document.querySelector("#bulkCity"),
   neighborhood: document.querySelector("#bulkNeighborhood"),
   mobileType: document.querySelector("#bulkMobileType"),
   passedPc: document.querySelector("#bulkPassedPc"),
   passedPc2: document.querySelector("#bulkPassedPc2"),
+  passedPc3: document.querySelector("#bulkPassedPc3"),
   blockNumber: document.querySelector("#bulkBlockNumber"),
   observation: document.querySelector("#bulkObservation"),
 };
 const bulkBenefitTypeChecks = document.querySelectorAll("[data-bulk-benefit-type]");
 const bulkAmount2Label = document.querySelector("#bulkAmount2Label");
+const bulkAmount3Label = document.querySelector("#bulkAmount3Label");
 const bulkPassedPc2Label = document.querySelector("#bulkPassedPc2Label");
+const bulkPassedPc3Label = document.querySelector("#bulkPassedPc3Label");
 const systemModal = document.querySelector("#systemModal");
 const systemModalTitle = document.querySelector("#systemModalTitle");
 const systemModalMessage = document.querySelector("#systemModalMessage");
@@ -501,7 +505,7 @@ function userAlertLabel(username) {
 }
 
 function pcLockedMessage(record) {
-  const usersLabel = [userAlertLabel(record.pcMarkedBy), userAlertLabel(record.pcMarkedBy2)].filter((item) => item !== "Sin dato").join(" / ") || "Sin dato";
+  const usersLabel = [userAlertLabel(record.pcMarkedBy), userAlertLabel(record.pcMarkedBy2), userAlertLabel(record.pcMarkedBy3)].filter((item) => item !== "Sin dato").join(" / ") || "Sin dato";
   return `Esta cedula ya pasó por PC. Zona: ${record.neighborhood || "Sin dato"}.${pcSectorLabel(record)} Usuario: ${usersLabel}`;
 }
 
@@ -511,7 +515,7 @@ function votedLockedMessage(record) {
 
 function lockedSelectedPcRecord() {
   if (isAdmin()) return null;
-  return records.find((record) => selectedRecords.has(record.id) && record.passedPc && record.passedPc2) || null;
+  return records.find((record) => selectedRecords.has(record.id) && !canMarkAnotherPc(record) && recordPassedPc(record)) || null;
 }
 
 function loadedRecordMessage(record) {
@@ -542,6 +546,7 @@ function hasBulkNonPcChanges() {
     || bulkFields.status.value
     || normalize(bulkFields.amount.value) !== ""
     || normalize(bulkFields.amount2.value) !== ""
+    || normalize(bulkFields.amount3.value) !== ""
     || normalize(bulkFields.city.value) !== ""
     || bulkFields.neighborhood.value
     || bulkFields.mobileType.value
@@ -556,9 +561,9 @@ function updateBulkEditorForSelection() {
   const sectorEditMode = Boolean(loadedRecord && sectorType && benefitMatchesType(recordBenefitTypes(loadedRecord), sectorType));
   const pcOnlyMode = Boolean(loadedRecord && (!loadedRecord.passedPc || canMarkAnotherPc(loadedRecord)));
   Object.entries(bulkFields).forEach(([field, control]) => {
-    const allowedSectorField = ["amount", "amount2", "passedPc", "passedPc2", "observation"].includes(field) || (sectorType === "movil" && field === "mobileType");
+    const allowedSectorField = ["amount", "amount2", "amount3", "passedPc", "passedPc2", "passedPc3", "observation"].includes(field) || (sectorType === "movil" && field === "mobileType");
     const container = control.closest("label") || control.closest("fieldset");
-    if (container) container.hidden = sectorEditMode ? !allowedSectorField : pcOnlyMode && !["passedPc", "passedPc2"].includes(field);
+    if (container) container.hidden = sectorEditMode ? !allowedSectorField : pcOnlyMode && !["passedPc", "passedPc2", "passedPc3"].includes(field);
   });
   document.querySelector("#clearBulkFields").hidden = pcOnlyMode || sectorEditMode;
   requestSectorRemovalButton.hidden = !sectorEditMode;
@@ -704,6 +709,10 @@ function repairLoadedRecords(loadedRecords) {
       voted: Boolean(record.voted),
       blockNumber: normalize(record.blockNumber),
       statusLider: statusValue(record.statusLider),
+      benefitType3: record.benefitType3 || "",
+      amount3: Number(record.amount3 || 0),
+      passedPc3: Boolean(record.passedPc3),
+      pcMarkedBy3: record.pcMarkedBy3 || "",
     };
     if (firstNames !== normalize(record.firstNames) || lastNames !== normalize(record.lastNames) || fullName !== normalize(record.fullName)) {
       changed = true;
@@ -742,7 +751,7 @@ function money(value) {
 }
 
 function effectiveAmount(record) {
-  return benefitAmount(record.benefitType, record.amount) + benefitAmount(record.benefitType2, record.amount2);
+  return benefitAmount(record.benefitType, record.amount) + benefitAmount(record.benefitType2, record.amount2) + benefitAmount(record.benefitType3, record.amount3);
 }
 
 function benefitAmount(type, amount) {
@@ -839,15 +848,19 @@ function benefitLabel(type) {
 }
 
 function recordBenefitTypes(record) {
-  return [record.benefitType, record.benefitType2].filter(Boolean);
+  return [record.benefitType, record.benefitType2, record.benefitType3].filter(Boolean);
 }
 
 function recordPassedPc(record) {
-  return Boolean(record.passedPc || record.passedPc2);
+  return Boolean(record.passedPc || record.passedPc2 || record.passedPc3);
 }
 
 function canMarkAnotherPc(record) {
-  return Boolean(record?.passedPc && !record?.passedPc2 && record?.benefitType2);
+  return Boolean(
+    (record?.benefitType && !record?.passedPc)
+    || (record?.benefitType2 && !record?.passedPc2)
+    || (record?.benefitType3 && !record?.passedPc3)
+  );
 }
 
 function benefitMatchesType(benefitType, type) {
@@ -875,6 +888,7 @@ function getDetail(record) {
   const parts = [];
   if (record.benefitType2) parts.push(`${benefitLabel(record.benefitType)}: ${money(benefitAmount(record.benefitType, record.amount))}`);
   if (record.benefitType2) parts.push(`${benefitLabel(record.benefitType2)}: ${money(benefitAmount(record.benefitType2, record.amount2))}`);
+  if (record.benefitType3) parts.push(`${benefitLabel(record.benefitType3)}: ${money(benefitAmount(record.benefitType3, record.amount3))}`);
   if (parts.length) return parts.join(" / ");
   if (record.benefitType === "movil_pago") return `Movil ${record.mobileType || "completo"} / Incentivo`;
   if (record.benefitType === "movil_devolucion") {
@@ -999,11 +1013,11 @@ function renderSummaryDetail() {
       <td>${escapeHtml(fixNameText(record.firstNames || record.fullName || ""))}</td>
       <td>${escapeHtml(fixNameText(record.lastNames))}</td>
       <td>${escapeHtml(record.documentNumber)}</td>
-      <td>${escapeHtml(benefitLabel(record.benefitType) || "-")}</td>
+      <td>${recordBenefitTypes(record).map((type) => escapeHtml(benefitLabel(type))).join(" / ") || "-"}</td>
       <td>${money(effectiveAmount(record))}</td>
       <td>${escapeHtml(record.neighborhood)}</td>
       <td>${escapeHtml(record.blockNumber)}</td>
-      <td><span class="pill ${record.passedPc ? "pc-yes" : "pc-no"}">${record.passedPc ? "Si" : "No"}</span></td>
+      <td><span class="pill ${recordPassedPc(record) ? "pc-yes" : "pc-no"}">${recordPassedPc(record) ? "Si" : "No"}</span></td>
     </tr>
   `).join("");
   summaryDetailEmpty.hidden = detailRecords.length > 0;
@@ -1070,7 +1084,7 @@ function renderNeighborhoodDetail() {
       <td>${escapeHtml(record.tableNumber)}</td>
       <td>${escapeHtml(record.orderNumber)}</td>
       <td><span class="pill status-${statusValue(record.status)}">${statusLabel(record.status)}</span></td>
-      <td>${escapeHtml(benefitLabel(record.benefitType) || "-")}</td>
+      <td>${recordBenefitTypes(record).map((type) => escapeHtml(benefitLabel(type))).join(" / ") || "-"}</td>
       <td><span class="pill ${record.voted ? "pc-yes" : "pc-no"}">${record.voted ? "VOTO" : "NO VOTO"}</span></td>
     </tr>
   `).join("");
@@ -1091,7 +1105,7 @@ function generateNeighborhoodPdf() {
       <td>${escapeHtml(fixNameText(record.firstNames || record.fullName || ""))}</td>
       <td>${escapeHtml(record.documentNumber)}</td>
       <td>${escapeHtml(statusLabel(record.status))}</td>
-      <td>${escapeHtml(benefitLabel(record.benefitType) || "-")}</td>
+      <td>${recordBenefitTypes(record).map((type) => escapeHtml(benefitLabel(type))).join(" / ") || "-"}</td>
       <td>${escapeHtml(getDetail(record))}</td>
     </tr>
   `).join("");
@@ -1142,7 +1156,7 @@ function generateNeighborhoodPdf() {
 }
 
 function generateBenefitPdf(type, title) {
-  const reportRecords = records.filter((record) => benefitMatchesType(record.benefitType, type));
+  const reportRecords = records.filter((record) => benefitMatchesType(recordBenefitTypes(record), type));
   const generatedAt = new Date().toLocaleString("es-PY");
   const rows = reportRecords.map((record) => `
     <tr>
@@ -1151,7 +1165,7 @@ function generateBenefitPdf(type, title) {
       <td>${escapeHtml(record.documentNumber)}</td>
       <td>${escapeHtml(record.neighborhood)}</td>
       <td>${escapeHtml(statusLabel(record.status))}</td>
-      <td>${escapeHtml(benefitLabel(record.benefitType) || "-")}</td>
+      <td>${recordBenefitTypes(record).map((item) => escapeHtml(benefitLabel(item))).join(" / ") || "-"}</td>
       <td>${escapeHtml(getDetail(record))}</td>
       <td>${money(effectiveAmount(record))}</td>
     </tr>
@@ -1852,9 +1866,9 @@ function getUserSummary() {
     if (updatedGroup) {
       updatedGroup.updatedCount += 1;
       updatedGroup.updatedAmount += effectiveAmount(record);
-      if (benefitMatchesType(record.benefitType, "movil")) updatedGroup.mobileCount += 1;
-      if (benefitMatchesType(record.benefitType, "devolucion")) updatedGroup.refundCount += 1;
-      if (benefitMatchesType(record.benefitType, "pago")) updatedGroup.paymentCount += 1;
+      if (benefitMatchesType(recordBenefitTypes(record), "movil")) updatedGroup.mobileCount += 1;
+      if (benefitMatchesType(recordBenefitTypes(record), "devolucion")) updatedGroup.refundCount += 1;
+      updatedGroup.paymentCount += recordBenefitTypes(record).filter((type) => benefitMatchesType(type, "pago")).length;
     }
 
     const pcGroup = ensureUserSummary(groups, record.pcMarkedBy);
@@ -1866,6 +1880,11 @@ function getUserSummary() {
     if (pcGroup2 && record.passedPc2) {
       pcGroup2.pcCount += 1;
       pcGroup2.pcAmount += benefitAmount(record.benefitType2, record.amount2);
+    }
+    const pcGroup3 = ensureUserSummary(groups, record.pcMarkedBy3);
+    if (pcGroup3 && record.passedPc3) {
+      pcGroup3.pcCount += 1;
+      pcGroup3.pcAmount += benefitAmount(record.benefitType3, record.amount3);
     }
   });
 
@@ -1947,6 +1966,7 @@ function getUserPaymentGroups() {
     [
       { type: record.benefitType, amount: record.amount, passedPc: record.passedPc, pcMarkedBy: record.pcMarkedBy },
       { type: record.benefitType2, amount: record.amount2, passedPc: record.passedPc2, pcMarkedBy: record.pcMarkedBy2 },
+      { type: record.benefitType3, amount: record.amount3, passedPc: record.passedPc3, pcMarkedBy: record.pcMarkedBy3 },
     ].forEach((payment) => {
       const paymentAmount = benefitAmount(payment.type, payment.amount);
       if (!payment.passedPc || paymentAmount <= 0) return;
@@ -2053,9 +2073,9 @@ function generatePcReportPdf() {
       <td>${escapeHtml(record.documentNumber)}</td>
       <td>${escapeHtml(record.neighborhood)}</td>
       <td>${escapeHtml(statusLabel(record.status))}</td>
-      <td>${escapeHtml(benefitLabel(record.benefitType))}${record.benefitType2 ? ` / ${escapeHtml(benefitLabel(record.benefitType2))}` : ""}</td>
+      <td>${recordBenefitTypes(record).map((type) => escapeHtml(benefitLabel(type))).join(" / ")}</td>
       <td>${money(effectiveAmount(record))}</td>
-      <td>${escapeHtml([record.pcMarkedBy, record.pcMarkedBy2].filter(Boolean).join(" / ") || "Sin dato")}</td>
+      <td>${escapeHtml([record.pcMarkedBy, record.pcMarkedBy2, record.pcMarkedBy3].filter(Boolean).join(" / ") || "Sin dato")}</td>
     </tr>
   `).join("");
   const printWindow = window.open("", "_blank");
@@ -2170,7 +2190,7 @@ function operationsRow(record) {
       <strong>${escapeHtml(record.pollingPlace)}</strong>
       <span>Mesa ${escapeHtml(record.tableNumber || "-")} · Orden ${escapeHtml(record.orderNumber || "-")}</span>
     </td>
-    <td><span class="pill">${benefitLabel(record.benefitType)}</span></td>
+      <td>${recordBenefitTypes(record).map((item) => `<span class="pill">${escapeHtml(benefitLabel(item))}</span>`).join(" ") || "-"}</td>
     <td>${escapeHtml(getDetail(record))}</td>
     <td>${escapeHtml(record.neighborhood)}</td>
     <td>${escapeHtml(record.blockNumber)}</td>
@@ -2284,32 +2304,45 @@ function resetBulkFields() {
   bulkFields.status.value = "";
   bulkFields.amount.value = "";
   bulkFields.amount2.value = "";
+  bulkFields.amount3.value = "";
   bulkFields.city.value = "";
   bulkFields.neighborhood.value = "";
   bulkFields.mobileType.value = "";
   bulkFields.passedPc.value = "";
   bulkFields.passedPc2.value = "";
+  bulkFields.passedPc3.value = "";
   bulkFields.blockNumber.value = "";
   bulkFields.observation.value = "";
   updateBenefitTypeFields();
 }
 
 function selectedBulkBenefitTypes() {
-  return Array.from(bulkBenefitTypeChecks).filter((item) => item.checked).map((item) => item.value);
+  return Array.from(bulkBenefitTypeChecks).filter((item) => item.checked).flatMap((item) => {
+    const repeat = Number(item.dataset.bulkBenefitRepeat || 1);
+    return Array.from({ length: repeat }, () => item.value);
+  }).slice(0, 3);
 }
 
 function updateBenefitTypeFields() {
   const selectedTypes = selectedBulkBenefitTypes();
   bulkFields.benefitType.value = selectedTypes.join(",");
   const hasSecondType = selectedTypes.length > 1;
+  const hasThirdType = selectedTypes.length > 2;
   bulkAmount2Label.hidden = !hasSecondType;
+  bulkAmount3Label.hidden = !hasThirdType;
   bulkPassedPc2Label.hidden = !hasSecondType;
+  bulkPassedPc3Label.hidden = !hasThirdType;
   if (!hasSecondType) {
     bulkFields.amount2.value = "";
     bulkFields.passedPc2.value = "";
   }
+  if (!hasThirdType) {
+    bulkFields.amount3.value = "";
+    bulkFields.passedPc3.value = "";
+  }
   if (selectedTypes[0] === "pago" && !bulkFields.amount.value) bulkFields.amount.value = "100000";
   if (selectedTypes[1] === "pago" && !bulkFields.amount2.value) bulkFields.amount2.value = "100000";
+  if (selectedTypes[2] === "pago" && !bulkFields.amount3.value) bulkFields.amount3.value = "100000";
 }
 
 async function toggleVoted(record) {
@@ -2359,7 +2392,7 @@ async function applyBulkChanges() {
     showSystemAlert(sectorMessage);
     return;
   }
-  const markingPcOnly = (bulkFields.passedPc.value === "si" || bulkFields.passedPc2.value === "si") && !hasBulkNonPcChanges();
+  const markingPcOnly = (bulkFields.passedPc.value === "si" || bulkFields.passedPc2.value === "si" || bulkFields.passedPc3.value === "si") && !hasBulkNonPcChanges();
   if (loadedRecord && !canSectorEditLoadedRecord(loadedRecord) && !markingPcOnly) {
     showSystemAlert(loadedRecordMessage(loadedRecord));
     return;
@@ -2368,6 +2401,7 @@ async function applyBulkChanges() {
   const selectedTypes = selectedBulkBenefitTypes();
   const hasAmount = normalize(bulkFields.amount.value) !== "";
   const hasAmount2 = normalize(bulkFields.amount2.value) !== "";
+  const hasAmount3 = normalize(bulkFields.amount3.value) !== "";
   const hasCity = normalize(bulkFields.city.value) !== "";
   const hasBlockNumber = normalize(bulkFields.blockNumber.value) !== "";
   const hasObservation = normalize(bulkFields.observation.value) !== "";
@@ -2377,15 +2411,18 @@ async function applyBulkChanges() {
     if (selectedTypes.length) {
       updated.benefitType = selectedTypes[0] || "";
       updated.benefitType2 = selectedTypes[1] || "";
+      updated.benefitType3 = selectedTypes[2] || "";
     }
     if (bulkFields.status.value) updated.status = bulkFields.status.value;
     if (hasAmount) updated.amount = Number(bulkFields.amount.value || 0);
     if (hasAmount2) updated.amount2 = Number(bulkFields.amount2.value || 0);
+    if (hasAmount3) updated.amount3 = Number(bulkFields.amount3.value || 0);
     if (hasCity) updated.city = normalize(bulkFields.city.value);
     if (bulkFields.neighborhood.value) updated.neighborhood = bulkFields.neighborhood.value;
     if (bulkFields.mobileType.value) updated.mobileType = bulkFields.mobileType.value;
     if (bulkFields.passedPc.value) updated.passedPc = bulkFields.passedPc.value === "si";
     if (bulkFields.passedPc2.value) updated.passedPc2 = bulkFields.passedPc2.value === "si";
+    if (bulkFields.passedPc3.value) updated.passedPc3 = bulkFields.passedPc3.value === "si";
     if (hasBlockNumber) updated.blockNumber = normalize(bulkFields.blockNumber.value);
     if (hasObservation) updated.observation = normalize(bulkFields.observation.value);
     if (shouldApplyAutomaticIncentive(updated)) {
@@ -2398,6 +2435,7 @@ async function applyBulkChanges() {
       updated.mobileType = "";
     }
     if (updated.benefitType2 === "gratis") updated.amount2 = 0;
+    if (updated.benefitType3 === "gratis") updated.amount3 = 0;
     return updated;
   });
 
@@ -2440,15 +2478,19 @@ async function clearSelectedFields() {
       ...record,
       benefitType: "",
       benefitType2: "",
+      benefitType3: "",
       status: "",
       amount: "",
       amount2: "",
+      amount3: "",
       city: "",
       neighborhood: "",
       mobileType: "",
       passedPc: false,
       passedPc2: false,
+      passedPc3: false,
       pcMarkedBy2: "",
+      pcMarkedBy3: "",
       observation: "",
       voted: false,
       blockNumber: "",
@@ -2519,7 +2561,7 @@ function toCsvValue(value) {
 }
 
 function exportCsv() {
-  const headers = ["nombres", "apellidos", "fecha_nacimiento", "sexo", "cedula", "local", "barrio_compania", "estado", "mesa", "orden", "tipo", "monto", "ciudad", "tipo_movil", "paso_pc", "voto", "manzana", "observacion"];
+  const headers = ["nombres", "apellidos", "fecha_nacimiento", "sexo", "cedula", "local", "barrio_compania", "estado", "mesa", "orden", "tipo", "monto", "tipo_2", "monto_2", "tipo_3", "monto_3", "ciudad", "tipo_movil", "paso_pc", "paso_pc_2", "paso_pc_3", "voto", "manzana", "observacion"];
   const lines = records.map((record) => [
     fixNameText(record.firstNames || record.fullName || ""),
     fixNameText(record.lastNames),
@@ -2533,9 +2575,15 @@ function exportCsv() {
     record.orderNumber,
     record.benefitType,
     effectiveAmount(record),
+    record.benefitType2,
+    record.amount2,
+    record.benefitType3,
+    record.amount3,
     record.city,
     record.mobileType,
     record.passedPc ? "si" : "no",
+    record.passedPc2 ? "si" : "no",
+    record.passedPc3 ? "si" : "no",
     record.voted ? "si" : "no",
     record.blockNumber,
     record.observation,

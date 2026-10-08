@@ -266,6 +266,7 @@
             <label class="check-row"><input type="checkbox" value="movil" data-bulk-benefit-type> Movil</label>
             <label class="check-row"><input type="checkbox" value="devolucion" data-bulk-benefit-type> Devolucion</label>
             <label class="check-row"><input type="checkbox" value="pago" data-bulk-benefit-type> Incentivo</label>
+            <label class="check-row"><input type="checkbox" value="pago" data-bulk-benefit-type data-bulk-benefit-repeat="2"> Doble incentivo</label>
             <label class="check-row"><input type="checkbox" value="gratis" data-bulk-benefit-type> Gratis</label>
           </fieldset>
           <label>Estado
@@ -281,6 +282,9 @@
           </label>
           <label id="bulkAmount2Label" hidden>Segundo monto
             <input id="bulkAmount2" type="number" min="0" step="1000" placeholder="No cambiar">
+          </label>
+          <label id="bulkAmount3Label" hidden>Tercer monto
+            <input id="bulkAmount3" type="number" min="0" step="1000" placeholder="No cambiar">
           </label>
           <label>Ciudad
             <input id="bulkCity" type="text" placeholder="No cambiar">
@@ -323,6 +327,13 @@
           </label>
           <label id="bulkPassedPc2Label" hidden>Segundo paso por PC
             <select id="bulkPassedPc2">
+              <option value="">No cambiar</option>
+              <option value="si">Si</option>
+              <option value="no">No</option>
+            </select>
+          </label>
+          <label id="bulkPassedPc3Label" hidden>Tercer paso por PC
+            <select id="bulkPassedPc3">
               <option value="">No cambiar</option>
               <option value="si">Si</option>
               <option value="no">No</option>
@@ -518,6 +529,6 @@
       </section>
     </div>
 
-    <script src="app.js?v=20261005-observacion-incentivo-editable"></script>
+    <script src="app.js?v=20261008-doble-incentivo-pc3"></script>
   </body>
 </html>

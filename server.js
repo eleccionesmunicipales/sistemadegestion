@@ -55,14 +55,18 @@ function toRecord(row) {
     statusLider: row.status_lider || "",
     benefitType: row.benefit_type,
     benefitType2: row.benefit_type_2 || "",
+    benefitType3: row.benefit_type_3 || "",
     amount: Number(row.amount || 0),
     amount2: Number(row.amount_2 || 0),
+    amount3: Number(row.amount_3 || 0),
     city: row.city,
     mobileType: row.mobile_type,
     passedPc: Boolean(row.passed_pc),
     pcMarkedBy: row.pc_marked_by || "",
     passedPc2: Boolean(row.passed_pc_2),
     pcMarkedBy2: row.pc_marked_by_2 || "",
+    passedPc3: Boolean(row.passed_pc_3),
+    pcMarkedBy3: row.pc_marked_by_3 || "",
     voted: Boolean(row.voted),
     blockNumber: row.block_number || "",
     observation: row.observation || "",
@@ -115,9 +119,22 @@ function shouldApplyAutomaticIncentive(record) {
 
 function benefitMatchesType(benefitType, type) {
   if (!type) return true;
+  if (Array.isArray(benefitType)) return benefitType.some((item) => benefitMatchesType(item, type));
   if (benefitType === type) return true;
   if (benefitType === "movil_pago" && ["movil", "pago"].includes(type)) return true;
   return benefitType === "movil_devolucion" && ["movil", "devolucion"].includes(type);
+}
+
+function recordBenefitTypes(record) {
+  return [record.benefit_type, record.benefit_type_2, record.benefit_type_3].filter(Boolean);
+}
+
+function canMarkAnotherPc(record) {
+  return Boolean(
+    (record?.benefit_type && !record?.passed_pc)
+    || (record?.benefit_type_2 && !record?.passed_pc_2)
+    || (record?.benefit_type_3 && !record?.passed_pc_3)
+  );
 }
 
 function applyAutomaticIncentive(payload) {
@@ -128,6 +145,7 @@ function applyAutomaticIncentive(payload) {
 function fromRecord(record, username = "", existingRecord = null) {
   const existingPcMarkedBy = existingRecord?.pc_marked_by || existingRecord?.pcMarkedBy || "";
   const existingPcMarkedBy2 = existingRecord?.pc_marked_by_2 || existingRecord?.pcMarkedBy2 || "";
+  const existingPcMarkedBy3 = existingRecord?.pc_marked_by_3 || existingRecord?.pcMarkedBy3 || "";
   const existingStatusLider = existingRecord?.status_lider || existingRecord?.statusLider || "";
   const payload = {
     id: String(record.id),
@@ -145,14 +163,18 @@ function fromRecord(record, username = "", existingRecord = null) {
     status_lider: existingRecord ? existingStatusLider : statusValue(record.statusLider),
     benefit_type: record.benefitType || "",
     benefit_type_2: record.benefitType2 || "",
+    benefit_type_3: record.benefitType3 || "",
     amount: Number(record.amount || 0),
     amount_2: Number(record.amount2 || 0),
+    amount_3: Number(record.amount3 || 0),
     city: record.city || "",
     mobile_type: record.mobileType || "",
     passed_pc: Boolean(record.passedPc),
     pc_marked_by: record.passedPc ? (existingPcMarkedBy || username) : "",
     passed_pc_2: Boolean(record.passedPc2),
     pc_marked_by_2: record.passedPc2 ? (existingPcMarkedBy2 || username) : "",
+    passed_pc_3: Boolean(record.passedPc3),
+    pc_marked_by_3: record.passedPc3 ? (existingPcMarkedBy3 || username) : "",
     voted: Boolean(record.voted),
     block_number: String(record.blockNumber || ""),
     observation: String(record.observation || ""),
@@ -301,7 +323,9 @@ async function userAlertLabel(username) {
 }
 
 async function pcLockedMessage(record) {
-  return `Esta cedula ya pasó por PC. Zona: ${record.neighborhood || "Sin dato"}.${pcSectorLabel(record)} Usuario: ${await userAlertLabel(record.pc_marked_by)}`;
+  const users = await Promise.all([record.pc_marked_by, record.pc_marked_by_2, record.pc_marked_by_3].map(userAlertLabel));
+  const usersLabel = users.filter((item) => item !== "Sin dato").join(" / ") || "Sin dato";
+  return `Esta cedula ya pasó por PC. Zona: ${record.neighborhood || "Sin dato"}.${pcSectorLabel(record)} Usuario: ${usersLabel}`;
 }
 
 function votedLockedMessage(record) {
@@ -315,8 +339,12 @@ async function loadedRecordMessage(record) {
 function hasOperationalLoad(record) {
   return Boolean(
     record?.benefit_type
+    || record?.benefit_type_2
+    || record?.benefit_type_3
     || record?.status
     || Number(record?.amount || 0) > 0
+    || Number(record?.amount_2 || 0) > 0
+    || Number(record?.amount_3 || 0) > 0
     || record?.city
     || record?.neighborhood
     || record?.mobile_type
@@ -332,10 +360,11 @@ function sameRecordValue(left, right) {
 function isOnlyPcMark(existingRecord, payload) {
   const markingFirstPc = !existingRecord.passed_pc && payload.passed_pc;
   const markingSecondPc = existingRecord.passed_pc && !existingRecord.passed_pc_2 && payload.passed_pc_2 && existingRecord.benefit_type_2;
-  if (!markingFirstPc && !markingSecondPc) return false;
-  const sameBudget = markingSecondPc
-    ? sameRecordValue(existingRecord.benefit_type_2, payload.benefit_type_2) && Number(existingRecord.amount_2 || 0) === Number(payload.amount_2 || 0)
-    : sameRecordValue(existingRecord.benefit_type, payload.benefit_type) && Number(existingRecord.amount || 0) === Number(payload.amount || 0);
+  const markingThirdPc = existingRecord.passed_pc && existingRecord.passed_pc_2 && !existingRecord.passed_pc_3 && payload.passed_pc_3 && existingRecord.benefit_type_3;
+  if (!markingFirstPc && !markingSecondPc && !markingThirdPc) return false;
+  let sameBudget = sameRecordValue(existingRecord.benefit_type, payload.benefit_type) && Number(existingRecord.amount || 0) === Number(payload.amount || 0);
+  if (markingSecondPc) sameBudget = sameRecordValue(existingRecord.benefit_type_2, payload.benefit_type_2) && Number(existingRecord.amount_2 || 0) === Number(payload.amount_2 || 0);
+  if (markingThirdPc) sameBudget = sameRecordValue(existingRecord.benefit_type_3, payload.benefit_type_3) && Number(existingRecord.amount_3 || 0) === Number(payload.amount_3 || 0);
   const automaticIncentive = ["", "gratis"].includes(existingRecord.benefit_type || "")
     && Number(existingRecord.amount || 0) <= 0
     && payload.benefit_type === "pago"
@@ -363,15 +392,15 @@ function isOnlyPcMark(existingRecord, payload) {
 }
 
 function isAllowedSectorUpdate(user, existingRecord, payload) {
-  const sectorType = existingRecord.benefit_type;
+  const sectorType = recordBenefitTypes(existingRecord);
   const canUseSector = (benefitMatchesType(sectorType, "movil") && canUseMobileSector(user))
     || (benefitMatchesType(sectorType, "devolucion") && canUseRefundSector(user));
   if (!canUseSector) return false;
-  if (!sectorType || !benefitMatchesType(payload.benefit_type, sectorType)) return false;
+  if (!sectorType.length || !benefitMatchesType(recordBenefitTypes(payload), sectorType[0])) return false;
   if (Number(payload.amount || 0) <= 0) return false;
   if (benefitMatchesType(sectorType, "movil") && !["completo", "parcial"].includes(payload.mobile_type)) return false;
 
-  const allowedChanges = new Set(["amount", "amount_2", "passed_pc", "passed_pc_2", "pc_marked_by", "pc_marked_by_2", "observation", "updated_by"]);
+  const allowedChanges = new Set(["amount", "amount_2", "amount_3", "passed_pc", "passed_pc_2", "passed_pc_3", "pc_marked_by", "pc_marked_by_2", "pc_marked_by_3", "observation", "updated_by"]);
   if (benefitMatchesType(sectorType, "movil") && canUseMobileSector(user)) allowedChanges.add("mobile_type");
   const fields = [
     "first_names",
@@ -388,13 +417,17 @@ function isAllowedSectorUpdate(user, existingRecord, payload) {
     "status_lider",
       "benefit_type",
       "benefit_type_2",
+      "benefit_type_3",
       "amount_2",
+      "amount_3",
     "city",
     "mobile_type",
       "passed_pc",
       "passed_pc_2",
+      "passed_pc_3",
       "pc_marked_by",
       "pc_marked_by_2",
+      "pc_marked_by_3",
     "voted",
       "block_number",
       "observation",
@@ -410,13 +443,11 @@ async function findPcLockedRecord(ids) {
   if (!cleanIds.length) return null;
   const { data, error } = await supabase
     .from("records")
-      .select("id, passed_pc, passed_pc_2, pc_marked_by, pc_marked_by_2, neighborhood, benefit_type")
+      .select("id, passed_pc, passed_pc_2, passed_pc_3, pc_marked_by, pc_marked_by_2, pc_marked_by_3, neighborhood, benefit_type, benefit_type_2, benefit_type_3")
     .in("id", cleanIds)
-      .eq("passed_pc", true)
-      .eq("passed_pc_2", true)
-    .limit(1);
+      .or("passed_pc.eq.true,passed_pc_2.eq.true,passed_pc_3.eq.true");
   if (error) throw error;
-  return data?.[0] || null;
+  return data?.find((record) => !canMarkAnotherPc(record)) || null;
 }
 
 async function preventPcLockedEdit(req, res, ids) {
@@ -651,7 +682,7 @@ app.put("/api/records/:id", requireAuth, async (req, res) => {
   }
   const payload = fromRecord({ ...req.body, id: req.params.id }, req.user.username, existing);
   if (req.user.role !== "admin" && existing?.voted) payload.voted = true;
-  if (req.user.role !== "admin" && existing?.passed_pc && existing?.passed_pc_2) return res.status(403).json({ error: await pcLockedMessage(existing) });
+  if (req.user.role !== "admin" && (existing?.passed_pc || existing?.passed_pc_2 || existing?.passed_pc_3) && !canMarkAnotherPc(existing)) return res.status(403).json({ error: await pcLockedMessage(existing) });
   if (await preventLoadedRecordEdit(req, res, existing, payload)) return;
   const { data, error } = await supabase.from("records").upsert(payload).select("*").single();
   if (error) return res.status(400).json({ error: error.message });
@@ -724,7 +755,7 @@ app.post("/api/records/bulk", requireAuth, async (req, res) => {
       if (existingById.get(record.id)?.voted) record.voted = true;
     });
 
-    const pcLockedRecord = payload.map((record) => existingById.get(record.id)).find((record) => record?.passed_pc && record?.passed_pc_2);
+    const pcLockedRecord = payload.map((record) => existingById.get(record.id)).find((record) => (record?.passed_pc || record?.passed_pc_2 || record?.passed_pc_3) && !canMarkAnotherPc(record));
     if (pcLockedRecord) return res.status(403).json({ error: await pcLockedMessage(pcLockedRecord) });
 
     const loadedRecord = payload.find((record) => {
@@ -738,7 +769,7 @@ app.post("/api/records/bulk", requireAuth, async (req, res) => {
   }
   const { error } = await supabase.from("records").upsert(payload);
   if (error) return res.status(400).json({ error: error.message });
-  const pcMarked = payload.filter((record) => (record.passed_pc && record.pc_marked_by === req.user.username) || (record.passed_pc_2 && record.pc_marked_by_2 === req.user.username)).length;
+  const pcMarked = payload.filter((record) => (record.passed_pc && record.pc_marked_by === req.user.username) || (record.passed_pc_2 && record.pc_marked_by_2 === req.user.username) || (record.passed_pc_3 && record.pc_marked_by_3 === req.user.username)).length;
   const details = payload.slice(0, 10).map((record) => {
     const type = record.benefit_type || "sin tipo";
     const status = record.status || "sin estado";
