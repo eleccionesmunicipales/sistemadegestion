@@ -859,7 +859,6 @@ function canMarkAnotherPc(record) {
   return Boolean(
     (record?.benefitType && !record?.passedPc)
     || (record?.benefitType2 && !record?.passedPc2)
-    || (record?.benefitType2 && record?.passedPc && record?.passedPc2 && !record?.passedPc3)
     || (record?.benefitType3 && !record?.passedPc3)
   );
 }
@@ -2332,14 +2331,14 @@ function updateBenefitTypeFields() {
   bulkAmount2Label.hidden = !hasSecondType;
   bulkAmount3Label.hidden = !hasThirdType;
   bulkPassedPc2Label.hidden = !hasSecondType;
-  bulkPassedPc3Label.hidden = !hasSecondType;
+  bulkPassedPc3Label.hidden = !hasThirdType;
   if (!hasSecondType) {
     bulkFields.amount2.value = "";
     bulkFields.passedPc2.value = "";
-    bulkFields.passedPc3.value = "";
   }
   if (!hasThirdType) {
     bulkFields.amount3.value = "";
+    bulkFields.passedPc3.value = "";
   }
   if (selectedTypes[0] === "pago" && !bulkFields.amount.value) bulkFields.amount.value = "100000";
   if (selectedTypes[1] === "pago" && !bulkFields.amount2.value) bulkFields.amount2.value = "100000";

@@ -133,7 +133,6 @@ function canMarkAnotherPc(record) {
   return Boolean(
     (record?.benefit_type && !record?.passed_pc)
     || (record?.benefit_type_2 && !record?.passed_pc_2)
-    || (record?.benefit_type_2 && record?.passed_pc && record?.passed_pc_2 && !record?.passed_pc_3)
     || (record?.benefit_type_3 && !record?.passed_pc_3)
   );
 }
