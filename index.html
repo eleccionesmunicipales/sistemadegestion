@@ -265,8 +265,8 @@
             <input id="bulkBenefitType" type="hidden">
             <label class="check-row"><input type="checkbox" value="movil" data-bulk-benefit-type> Movil</label>
             <label class="check-row"><input type="checkbox" value="devolucion" data-bulk-benefit-type> Devolucion</label>
-            <label class="check-row"><input type="checkbox" value="pago" data-bulk-benefit-type> Incentivo</label>
-            <label class="check-row"><input type="checkbox" value="pago" data-bulk-benefit-type data-bulk-benefit-repeat="2"> Doble incentivo</label>
+            <label class="check-row"><input type="checkbox" value="pago" data-bulk-benefit-type data-primary-incentive> Incentivo</label>
+            <label class="check-row"><input type="checkbox" value="pago" data-bulk-benefit-type data-second-incentive> Segundo incentivo</label>
             <label class="check-row"><input type="checkbox" value="gratis" data-bulk-benefit-type> Gratis</label>
           </fieldset>
           <label>Estado
@@ -332,7 +332,7 @@
               <option value="no">No</option>
             </select>
           </label>
-          <label id="bulkPassedPc3Label" hidden>Tercer paso por PC
+          <label id="bulkPassedPc3Label" hidden>Tercer paso por PC (confirma cobro)
             <select id="bulkPassedPc3">
               <option value="">No cambiar</option>
               <option value="si">Si</option>

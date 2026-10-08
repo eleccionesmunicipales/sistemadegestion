@@ -133,6 +133,7 @@ function canMarkAnotherPc(record) {
   return Boolean(
     (record?.benefit_type && !record?.passed_pc)
     || (record?.benefit_type_2 && !record?.passed_pc_2)
+    || (record?.benefit_type_2 && record?.passed_pc && record?.passed_pc_2 && !record?.passed_pc_3)
     || (record?.benefit_type_3 && !record?.passed_pc_3)
   );
 }
@@ -360,11 +361,11 @@ function sameRecordValue(left, right) {
 function isOnlyPcMark(existingRecord, payload) {
   const markingFirstPc = !existingRecord.passed_pc && payload.passed_pc;
   const markingSecondPc = existingRecord.passed_pc && !existingRecord.passed_pc_2 && payload.passed_pc_2 && existingRecord.benefit_type_2;
-  const markingThirdPc = existingRecord.passed_pc && existingRecord.passed_pc_2 && !existingRecord.passed_pc_3 && payload.passed_pc_3 && existingRecord.benefit_type_3;
+  const markingThirdPc = existingRecord.passed_pc && existingRecord.passed_pc_2 && !existingRecord.passed_pc_3 && payload.passed_pc_3 && existingRecord.benefit_type_2;
   if (!markingFirstPc && !markingSecondPc && !markingThirdPc) return false;
   let sameBudget = sameRecordValue(existingRecord.benefit_type, payload.benefit_type) && Number(existingRecord.amount || 0) === Number(payload.amount || 0);
   if (markingSecondPc) sameBudget = sameRecordValue(existingRecord.benefit_type_2, payload.benefit_type_2) && Number(existingRecord.amount_2 || 0) === Number(payload.amount_2 || 0);
-  if (markingThirdPc) sameBudget = sameRecordValue(existingRecord.benefit_type_3, payload.benefit_type_3) && Number(existingRecord.amount_3 || 0) === Number(payload.amount_3 || 0);
+  if (markingThirdPc) sameBudget = sameRecordValue(existingRecord.benefit_type_2, payload.benefit_type_2) && Number(existingRecord.amount_2 || 0) === Number(payload.amount_2 || 0);
   const automaticIncentive = ["", "gratis"].includes(existingRecord.benefit_type || "")
     && Number(existingRecord.amount || 0) <= 0
     && payload.benefit_type === "pago"
