@@ -1107,6 +1107,7 @@ function generateNeighborhoodPdf() {
       <td>${escapeHtml(statusLabel(record.status))}</td>
       <td>${recordBenefitTypes(record).map((type) => escapeHtml(benefitLabel(type))).join(" / ") || "-"}</td>
       <td>${escapeHtml(getDetail(record))}</td>
+      <td>${escapeHtml(record.observation || "")}</td>
     </tr>
   `).join("");
   const printWindow = window.open("", "_blank");
@@ -1142,9 +1143,10 @@ function generateNeighborhoodPdf() {
               <th>Estado</th>
               <th>Tipo</th>
               <th>Detalle</th>
+              <th>Observacion</th>
             </tr>
           </thead>
-          <tbody>${rows || `<tr><td colspan="6">No hay registros para este barrio/compañia.</td></tr>`}</tbody>
+          <tbody>${rows || `<tr><td colspan="7">No hay registros para este barrio/compañia.</td></tr>`}</tbody>
         </table>
       </body>
     </html>
@@ -1168,6 +1170,7 @@ function generateBenefitPdf(type, title) {
       <td>${recordBenefitTypes(record).map((item) => escapeHtml(benefitLabel(item))).join(" / ") || "-"}</td>
       <td>${escapeHtml(getDetail(record))}</td>
       <td>${money(effectiveAmount(record))}</td>
+      <td>${escapeHtml(record.observation || "")}</td>
     </tr>
   `).join("");
   const printWindow = window.open("", "_blank");
@@ -1205,9 +1208,10 @@ function generateBenefitPdf(type, title) {
               <th>Tipo</th>
               <th>Detalle</th>
               <th>Monto</th>
+              <th>Observacion</th>
             </tr>
           </thead>
-          <tbody>${rows || `<tr><td colspan="8">No hay registros para este reporte.</td></tr>`}</tbody>
+          <tbody>${rows || `<tr><td colspan="9">No hay registros para este reporte.</td></tr>`}</tbody>
         </table>
       </body>
     </html>
@@ -1693,6 +1697,7 @@ function generateLiderVotesPdf() {
       <td>${escapeHtml(fixNameText(record.firstNames || record.fullName || ""))}</td>
       <td>${escapeHtml(record.documentNumber)}</td>
       <td>${escapeHtml(record.neighborhood)}</td>
+      <td>${escapeHtml(record.observation || "")}</td>
     </tr>
   `).join("");
   const printWindow = window.open("", "_blank");
@@ -1733,9 +1738,10 @@ function generateLiderVotesPdf() {
               <th>Nombres</th>
               <th>Cedula</th>
               <th>Barrio/compania</th>
+              <th>Observacion</th>
             </tr>
           </thead>
-          <tbody>${rows || `<tr><td colspan="5">No hay registros POSITIVOS o DUDOSOS para Lider.</td></tr>`}</tbody>
+          <tbody>${rows || `<tr><td colspan="6">No hay registros POSITIVOS o DUDOSOS para Lider.</td></tr>`}</tbody>
         </table>
       </body>
     </html>
@@ -2002,6 +2008,7 @@ function generateUserPaymentDetailPdf() {
         <td>${escapeHtml(benefitLabel(record.reportBenefitType) || "-")}</td>
         <td>${escapeHtml(getDetail(record))}</td>
         <td>${money(record.reportAmount)}</td>
+        <td>${escapeHtml(record.observation || "")}</td>
       </tr>
     `).join("");
     return `
@@ -2019,6 +2026,7 @@ function generateUserPaymentDetailPdf() {
               <th>Tipo</th>
               <th>Detalle</th>
               <th>Monto</th>
+              <th>Observacion</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
@@ -2076,6 +2084,7 @@ function generatePcReportPdf() {
       <td>${recordBenefitTypes(record).map((type) => escapeHtml(benefitLabel(type))).join(" / ")}</td>
       <td>${money(effectiveAmount(record))}</td>
       <td>${escapeHtml([record.pcMarkedBy, record.pcMarkedBy2, record.pcMarkedBy3].filter(Boolean).join(" / ") || "Sin dato")}</td>
+      <td>${escapeHtml(record.observation || "")}</td>
     </tr>
   `).join("");
   const printWindow = window.open("", "_blank");
@@ -2113,9 +2122,10 @@ function generatePcReportPdf() {
               <th>Tipo</th>
               <th>Monto</th>
               <th>Marcado por</th>
+              <th>Observacion</th>
             </tr>
           </thead>
-          <tbody>${rows || `<tr><td colspan="8">No hay registros marcados como Paso por PC.</td></tr>`}</tbody>
+          <tbody>${rows || `<tr><td colspan="9">No hay registros marcados como Paso por PC.</td></tr>`}</tbody>
         </table>
       </body>
     </html>
